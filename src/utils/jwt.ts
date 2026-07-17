@@ -10,7 +10,7 @@ export const generateAccessToken = (user: any) => {
         },
         process.env.JWT_SECRET!,
         {
-            expiresIn: "15m",
+             expiresIn: "30d",
         }
     );
 };

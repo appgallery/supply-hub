@@ -41,8 +41,8 @@ export const createClient = async (body: any, createdByUserId: number) => {
     }
 
 
-    if (createdBy.role.name !== "superadmin") {
-        throw new Error("Only Super Admin can create clients.");
+    if (createdBy.role.name !== "admin") {
+        throw new Error("Only Admin can create clients.");
     }
 
     if (!companyName) {
