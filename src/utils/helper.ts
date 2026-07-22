@@ -1,3 +1,9 @@
+import { AppDataSource } from "../database/data-source";
+import { ActivityLog } from "../entities/ActivityLog";
+import { ActivityType } from "./constants";
+export const activityLogRepository = AppDataSource.getRepository(ActivityLog);
+
+
 export const generateOTP = (length: number = 6): string => {
     let otp = "";
 
@@ -23,4 +29,25 @@ export const generateRandomCode = (
     }
 
     return result;
+};
+
+export const createActivity = async (
+    title: string,
+    type: ActivityType,
+    clientId?: number,
+    subClientId?: number,
+    userId?: number,
+    description?: string
+) => {
+
+    const activity = activityLogRepository.create({
+        title,
+        type,
+        clientId,
+        subClientId,
+        userId,
+        description,
+    });
+
+    await activityLogRepository.save(activity);
 };

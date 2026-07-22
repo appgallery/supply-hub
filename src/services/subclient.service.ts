@@ -1,10 +1,12 @@
 
 import bcrypt from "bcryptjs";
-import crypto from "crypto";import { AppDataSource } from "../database/data-source";
+import crypto from "crypto"; import { AppDataSource } from "../database/data-source";
 import { Client } from "../entities/Client";
 import { Role } from "../entities/Role";
 import { SubClient } from "../entities/SubClient";
 import { User } from "../entities/User";
+import { createActivity } from "../utils/helper";
+import { ActivityType } from "../utils/constants";
 
 const clientRepository = AppDataSource.getRepository(Client);
 const subClientRepository = AppDataSource.getRepository(SubClient);
@@ -130,6 +132,16 @@ export const createSubClient = async (
     await userRepository.save(user);
 
     // Send email with temporaryPassword here
+    
+    const fullName = `${user.firstName} ${user.lastName}`;
+    const clientId = createdBy.client.clientId
+    await createActivity(
+        `New Dealer "${subClient.companyName}" has been added by ${fullName}.`,
+        ActivityType.SUB_CLIENT_CREATED,
+        clientId,
+        subClient.subClientId,
+        user.userId
+    )
 
     return {
         message: "Sub Client created successfully.",
@@ -181,20 +193,20 @@ export const getSubClients = async (clientId: number) => {
         createdAt: subClient.createdAt,
         createdBy: subClient.createdBy
             ? {
-                  userId: subClient.createdBy.userId,
-                  firstName: subClient.createdBy.firstName,
-                  lastName: subClient.createdBy.lastName,
-              }
+                userId: subClient.createdBy.userId,
+                firstName: subClient.createdBy.firstName,
+                lastName: subClient.createdBy.lastName,
+            }
             : null,
         subClientAdmin:
             subClient.users.length > 0
                 ? {
-                      userId: subClient.users[0].userId,
-                      firstName: subClient.users[0].firstName,
-                      lastName: subClient.users[0].lastName,
-                      email: subClient.users[0].email,
-                      mobile: subClient.users[0].mobile,
-                  }
+                    userId: subClient.users[0].userId,
+                    firstName: subClient.users[0].firstName,
+                    lastName: subClient.users[0].lastName,
+                    email: subClient.users[0].email,
+                    mobile: subClient.users[0].mobile,
+                }
                 : null,
     }));
 };

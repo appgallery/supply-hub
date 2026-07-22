@@ -7,6 +7,15 @@ import { Role } from "../entities/Role";
 import { Client } from "../entities/Client";
 import { SubClient } from "../entities/SubClient";
 import { RefreshToken } from "../entities/RefreshToken";
+import { Product } from "../entities/Product";
+import { Color } from "../entities/Color";
+import { Size } from "../entities/Size";
+import { Variant } from "../entities/Variants";
+import { VariantImage } from "../entities/VariantImage";
+import { ProductMedia } from "../entities/ProductMedia";
+import { Order } from "../entities/Order";
+import { OrderItem } from "../entities/OrderItem";
+import { ActivityLog } from "../entities/ActivityLog";
 
 dotenv.config();
 console.log({
@@ -32,5 +41,14 @@ export const AppDataSource = new DataSource({
         Client,
         SubClient,
         RefreshToken,
+        Product,
+        Color,
+        Size,
+        Variant,
+        VariantImage,
+        ProductMedia,
+        Order,
+        OrderItem,
+        ActivityLog
     ],
 });

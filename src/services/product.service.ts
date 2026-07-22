@@ -1,0 +1,403 @@
+import { MoreThanOrEqual } from "typeorm";
+import { Color } from "../entities/Color";
+import { Product } from "../entities/Product";
+import { ProductMedia } from "../entities/ProductMedia";
+import { Size } from "../entities/Size";
+import { AppDataSource } from "../database/data-source";
+import { User } from "../entities/User";
+import { ActivityType, Role, SellerType } from "../utils/constants";
+import { appendFile } from "node:fs";
+import { Client } from "../entities/Client";
+import { VariantImage } from "../entities/VariantImage";
+import { Variant } from "../entities/Variants";
+import { createActivity } from "../utils/helper";
+
+const productRepository = AppDataSource.getRepository(Product);
+const userRepository = AppDataSource.getRepository(User);
+const clientRepository = AppDataSource.getRepository(Client)
+
+export const createProduct = async (
+    body: any,
+    userId: number
+) => {
+    return await AppDataSource.transaction(async (manager) => {
+        const {
+            productName,
+            description,
+            base_price,
+            discount_percentage = 0,
+            currency = "AUD",
+            clientId,
+            media = [],
+            variants = [],
+        } = body;
+
+        const user = await manager.findOne(User, {
+            where: { userId },
+            relations: ["client", "role"],
+        });
+
+        if (!user) {
+            throw new Error("User not found.");
+        }
+
+        if (
+            user.role.name !== Role.SUPER_ADMIN &&
+            user.role.name !== Role.CLIENT
+        ) {
+            throw new Error("You are not authorized.");
+        }
+
+        let client;
+
+        if (user.role.name === Role.SUPER_ADMIN) {
+            client = await manager.findOne(Client, {
+                where: { clientId },
+            });
+
+            if (!client) {
+                throw new Error("Client not found.");
+            }
+        } else {
+            client = user.client;
+        }
+        console.log("client", client)
+        const duplicate = await manager.findOne(Product, {
+            where: {
+                productName,
+                client: {
+                    clientId: client.clientId,
+                },
+            },
+            relations: ["client"],
+        });
+        console.log("duplicate", duplicate)
+        if (duplicate) {
+            throw new Error("Product already exists.");
+        }
+
+        const discounted_price =
+            Number(base_price) -
+            (Number(base_price) * Number(discount_percentage)) / 100;
+        const productCode = await generateProductCode();
+
+        const product = manager.create(Product, {
+            productCode,
+            productName,
+            description,
+            base_price,
+            discount_percentage,
+            discounted_price,
+            currency,
+            client,
+            created_by: user.userId,
+        });
+
+        const savedProduct = await manager.save(product);
+
+        const fullName = `${user.firstName} ${user.lastName}`;
+        await createActivity(
+            `New Product "${product.productName}" has been added by ${fullName}.`,
+            ActivityType.PRODUCT_CREATED,
+            client.clientId,
+            undefined,
+            user.userId
+        );
+        // ================= Product Images =================
+
+        for (const item of media) {
+            const productMedia = manager.create(ProductMedia, {
+                product: savedProduct,
+                media_url: item.media_url,
+                media_type: item.media_type,
+                created_by: user.userId
+            });
+
+            await manager.save(productMedia);
+        }
+
+        // ================= Variants =================
+
+        for (const item of variants) {
+            const existingSku = await manager.findOne(Variant, {
+                where: {
+                    sku: item.sku,
+                },
+            });
+
+            if (existingSku) {
+                throw new Error(`SKU ${item.sku} already exists.`);
+            }
+
+            let color = null;
+            let size = null;
+
+            if (item.colorId) {
+                color = await manager.findOne(Color, {
+                    where: {
+                        colorId: item.colorId,
+                    },
+                });
+            }
+
+            if (item.sizeId) {
+                size = await manager.findOne(Size, {
+                    where: {
+                        sizeId: item.sizeId,
+                    },
+                });
+            }
+
+            const variantDiscountedPrice =
+                Number(item.price) -
+                (Number(item.price) *
+                    Number(item.discount_percentage || 0)) /
+                100;
+
+            const variant = manager.create(Variant, {
+                product: savedProduct,
+                name: item.name,
+                sku: item.sku,
+                price: item.price,
+                discount_percentage: item.discount_percentage || 0,
+                discounted_price: variantDiscountedPrice,
+                stock: item.stock,
+                color,
+                size,
+                created_by: user.userId,
+            });
+
+            const savedVariant = await manager.save(variant);
+
+            // ============== Variant Images ==============
+
+            if (item.images?.length) {
+                for (const image of item.images) {
+                    const variantImage = manager.create(VariantImage, {
+                        variant: savedVariant,
+                        image_url: image.image_url,
+                        created_by: user.userId
+                    });
+
+                    await manager.save(variantImage);
+                }
+            }
+        }
+
+        return await manager.findOne(Product, {
+            where: {
+                productId: savedProduct.productId,
+            },
+            relations: [
+                "client",
+                "media",
+                "variants",
+                "variants.variantImages",
+                "variants.color",
+                "variants.size",
+            ],
+        });
+    });
+};
+
+export const generateProductCode = async () => {
+    const lastProduct = await productRepository.find({
+        order: {
+            productId: "DESC",
+        },
+        take: 1,
+    });
+    const product = lastProduct[0];
+    if (!product) {
+        return "PRD000001";
+    }
+
+    const lastNumber = Number(product.productCode.replace("PRD", ""));
+
+    return `PRD${String(lastNumber + 1).padStart(6, "0")}`;
+}
+
+export const getProducts = async (userId: number) => {
+    const user = await userRepository.findOne({
+        where: { userId },
+        relations: ["client", "role"],
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    if (user.role.name === Role.SUPER_ADMIN) {
+        return await productRepository.find({
+            relations: ["client", "variants", "media"],
+            order: {
+                productId: "DESC",
+            },
+        });
+    }
+
+    return await productRepository.find({
+        where: {
+            client: {
+                clientId: user.client.clientId,
+            },
+            is_active: true,
+        },
+        relations: ["client", "variants", "media"],
+        order: {
+            productId: "DESC",
+        },
+    });
+};
+
+export const getProductById = async (
+    productId: number,
+    userId: number
+) => {
+    const user = await userRepository.findOne({
+        where: { userId },
+        relations: ["client", "role"],
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    let product;
+
+    if (user.role.name === Role.SUPER_ADMIN) {
+        product = await productRepository.findOne({
+            where: { productId, is_active: true },
+            relations: ["client", "variants", "media"],
+        });
+    } else {
+        product = await productRepository.findOne({
+            where: {
+                productId,
+                client: {
+                    clientId: user.client.clientId,
+                },
+                is_active: true,
+            },
+            relations: ["client", "variants", "media"],
+        });
+    }
+
+    if (!product) {
+        throw new Error("Product not found.");
+    }
+
+    return product;
+};
+
+export const updateProduct = async (
+    productId: number,
+    body: any,
+    userId: number
+) => {
+    const user = await userRepository.findOne({
+        where: { userId },
+        relations: ["client", "role"],
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    if (
+        user.role.name !== Role.SUPER_ADMIN &&
+        user.role.name !== Role.CLIENT
+    ) {
+        throw new Error("You are not authorized.");
+    }
+
+    let product;
+
+    if (user.role.name === Role.SUPER_ADMIN) {
+        product = await productRepository.findOne({
+            where: { productId },
+            relations: ["client"],
+        });
+    } else {
+        product = await productRepository.findOne({
+            where: {
+                productId,
+                client: {
+                    clientId: user.client.clientId,
+                },
+            },
+            relations: ["client"],
+        });
+    }
+
+    if (!product) {
+        throw new Error("Product not found.");
+    }
+
+    Object.assign(product, body);
+
+    product.discounted_price =
+        Number(product.base_price) -
+        (Number(product.base_price) *
+            Number(product.discount_percentage)) /
+        100;
+
+    product.updated_by = user.userId;
+
+    await productRepository.save(product);
+
+    return product;
+};
+
+export const deleteProduct = async (
+    productId: number,
+    userId: number
+) => {
+    const user = await userRepository.findOne({
+        where: { userId },
+        relations: ["client", "role"],
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    if (
+        user.role.name !== Role.SUPER_ADMIN &&
+        user.role.name !== Role.CLIENT
+    ) {
+        throw new Error("You are not authorized.");
+    }
+
+    let product;
+
+    if (user.role.name === Role.SUPER_ADMIN) {
+        product = await productRepository.findOne({
+            where: { productId },
+        });
+    } else {
+        product = await productRepository.findOne({
+            where: {
+                productId,
+                client: {
+                    clientId: user.client.clientId,
+                },
+            },
+            relations: ["client"],
+        });
+    }
+
+    if (!product) {
+        throw new Error("Product not found.");
+    }
+
+    product.is_active = false;
+    product.updated_by = user.userId;
+
+    await productRepository.save(product);
+
+    return {
+        success: true,
+        message: "Product deleted successfully.",
+    };
+};

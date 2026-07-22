@@ -4,6 +4,8 @@ import { AppDataSource } from "../database/data-source";
 import { Client } from "../entities/Client";
 import { User } from "../entities/User";
 import { Role } from "../entities/Role";
+import { createActivity } from "../utils/helper";
+import { ActivityType } from "../utils/constants";
 const clientRepository = AppDataSource.getRepository(Client);
 const userRepository = AppDataSource.getRepository(User);
 const roleRepository = AppDataSource.getRepository(Role);
@@ -112,6 +114,7 @@ export const createClient = async (body: any, createdByUserId: number) => {
 
     await clientRepository.save(client);
 
+
     const user = userRepository.create({
         firstName,
         lastName,
@@ -125,7 +128,14 @@ export const createClient = async (body: any, createdByUserId: number) => {
     });
 
     await userRepository.save(user);
-
+    
+    await createActivity(
+        `New Client ${client.companyName} has been added`,
+        ActivityType.CLIENT_CREATED,
+        client.clientId,
+        undefined,
+        user.userId
+    );
     // Send credentials via email
     /*
     await sendWelcomeEmail({
