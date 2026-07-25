@@ -129,10 +129,10 @@ export const createClient = async (
 
     // Create Login User
     const user = userRepository.create({
-        firstName,
-        lastName,
-        email,
-        mobile,
+        firstName: owner.firstName,
+        lastName: owner.lastName,
+        email: owner.email,
+        mobile: owner.mobile,
         password: hashedPassword,
         role,
         client,
