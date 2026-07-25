@@ -35,15 +35,15 @@ export const getClients = async (
         const offset = Number(req.query.offset) || 0;
         const limit = Number(req.query.limit) || 10;
 
-        const clients = await clientService.getClients(
-            offset,
-            limit
-        );
+        const result = await clientService.getClients(offset, limit);
 
         return res.status(200).json({
             status: true,
             message: "Clients fetched successfully.",
-            data: clients,
+            total: result.total,
+            offset: result.offset,
+            limit: result.limit,
+            data: result.data
         });
 
     } catch (error: any) {
