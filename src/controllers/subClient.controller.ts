@@ -33,15 +33,26 @@ export const getSubClients = async (
     res: Response,
 ) => {
     try {
-        const result = await subClientService.getSubClients(Number(req.query.clientId));
+        const clientId = Number(req.query.clientId);
+        const offset = Number(req.query.offset) || 0;
+        const limit = Number(req.query.limit) || 10;
 
-        return res.status(200).json(result);
-    } catch (error) {
+        const result = await subClientService.getSubClients(
+            clientId,
+            offset,
+            limit
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Sub clients fetched successfully.",
+            data: result,
+        });
+
+    } catch (error: any) {
         return res.status(500).json({
-            status: false,
-            message:
-                error.message ||
-                "Internal server error"
+            success: false,
+            message: error.message || "Internal server error",
         });
     }
 };

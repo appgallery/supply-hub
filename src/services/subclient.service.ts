@@ -156,8 +156,13 @@ export const createSubClient = async (
     };
 };
 
-export const getSubClients = async (clientId: number) => {
-    const subClients = await subClientRepository.find({
+export const getSubClients = async (
+    clientId: number,
+    offset: number = 0,
+    limit: number = 10
+) => {
+
+    const [subClients, total] = await subClientRepository.findAndCount({
         where: {
             client: {
                 clientId,
@@ -172,43 +177,50 @@ export const getSubClients = async (clientId: number) => {
         order: {
             createdAt: "DESC",
         },
+        skip: offset,
+        take: limit,
     });
 
-    return subClients.map((subClient) => ({
-        subClientId: subClient.subClientId,
-        companyName: subClient.companyName,
-        contactPerson: subClient.contactPerson,
-        email: subClient.email,
-        mobile: subClient.mobile,
-        gstNumber: subClient.gstNumber,
-        panNumber: subClient.panNumber,
-        website: subClient.website,
-        address: subClient.address,
-        city: subClient.city,
-        state: subClient.state,
-        country: subClient.country,
-        postalCode: subClient.postalCode,
-        creditLimit: subClient.creditLimit,
-        availableCredit: subClient.availableCredit,
-        createdAt: subClient.createdAt,
-        createdBy: subClient.createdBy
-            ? {
-                userId: subClient.createdBy.userId,
-                firstName: subClient.createdBy.firstName,
-                lastName: subClient.createdBy.lastName,
-            }
-            : null,
-        subClientAdmin:
-            subClient.users.length > 0
+    return {
+        total,
+        offset,
+        limit,
+        data: subClients.map((subClient) => ({
+            subClientId: subClient.subClientId,
+            companyName: subClient.companyName,
+            contactPerson: subClient.contactPerson,
+            email: subClient.email,
+            mobile: subClient.mobile,
+            gstNumber: subClient.gstNumber,
+            panNumber: subClient.panNumber,
+            website: subClient.website,
+            address: subClient.address,
+            city: subClient.city,
+            state: subClient.state,
+            country: subClient.country,
+            postalCode: subClient.postalCode,
+            creditLimit: subClient.creditLimit,
+            availableCredit: subClient.availableCredit,
+            createdAt: subClient.createdAt,
+            createdBy: subClient.createdBy
                 ? {
-                    userId: subClient.users[0].userId,
-                    firstName: subClient.users[0].firstName,
-                    lastName: subClient.users[0].lastName,
-                    email: subClient.users[0].email,
-                    mobile: subClient.users[0].mobile,
+                    userId: subClient.createdBy.userId,
+                    firstName: subClient.createdBy.firstName,
+                    lastName: subClient.createdBy.lastName,
                 }
                 : null,
-    }));
+            subClientAdmin:
+                subClient.users.length > 0
+                    ? {
+                        userId: subClient.users[0].userId,
+                        firstName: subClient.users[0].firstName,
+                        lastName: subClient.users[0].lastName,
+                        email: subClient.users[0].email,
+                        mobile: subClient.users[0].mobile,
+                    }
+                    : null,
+        })),
+    };
 };
 
 export const getSubClientById = async (
