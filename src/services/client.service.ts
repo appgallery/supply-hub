@@ -471,7 +471,7 @@ export const deleteClient = async (
     const client = await clientRepository.findOne({
         where: {
             clientId,
-            isActive: false,
+            isActive: true,
         },
     });
 
