@@ -19,7 +19,6 @@ export const createClient = async (
 
     const {
         companyName,
-        clientCode,
         contactPerson,
         email,
         mobile,
@@ -60,6 +59,9 @@ export const createClient = async (
     if (!email) {
         throw new Error("Email is required.");
     }
+
+    const clientCode = await generateClientCode();
+
 
     const existingUser = await userRepository.findOne({
         where: [
@@ -270,4 +272,23 @@ export const updateClient = async (
 
 export const deleteClient = async (clientId: number) => {
     // Soft delete client
+};
+
+export const generateClientCode = async () => {
+    const lastClient = await clientRepository.find({
+        order: {
+            clientId: "DESC", // or createdAt if that's your ordering field
+        },
+        take: 1,
+    });
+
+    if (!lastClient.length) {
+        return "CLI000001";
+    }
+
+    const lastNumber = Number(
+        lastClient[0].clientCode.replace("CLI", "")
+    );
+
+    return `CLI${String(lastNumber + 1).padStart(6, "0")}`;
 };
