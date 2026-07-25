@@ -267,11 +267,267 @@ export const updateClient = async (
     clientId: number,
     body: any
 ) => {
-    // Update client details
+
+    const {
+        companyName,
+        contactPerson,
+        email,
+        mobile,
+        gstNumber,
+        panNumber,
+        website,
+        address,
+        city,
+        state,
+        country,
+        postalCode,
+        creditLimit,
+        availableCredit,
+        owner,
+    } = body;
+
+    const client = await clientRepository.findOne({
+        where: {
+            clientId,
+        },
+        relations: [
+            "createdBy",
+        ],
+    });
+
+    if (!client) {
+        throw new Error("Client not found.");
+    }
+
+    // Check duplicate company name
+    if (companyName) {
+
+        const existingCompany = await clientRepository
+            .createQueryBuilder("client")
+            .where("LOWER(client.companyName) = LOWER(:companyName)", {
+                companyName,
+            })
+            .andWhere("client.clientId != :clientId", {
+                clientId,
+            })
+            .getOne();
+
+        if (existingCompany) {
+            throw new Error("Company name already exists.");
+        }
+    }
+
+    // Check duplicate email/mobile
+    const existingClient = await clientRepository
+        .createQueryBuilder("client")
+        .where(
+            "(client.email = :email OR client.mobile = :mobile)",
+            {
+                email,
+                mobile,
+            }
+        )
+        .andWhere("client.clientId != :clientId", {
+            clientId,
+        })
+        .getOne();
+
+    if (existingClient) {
+        throw new Error("Email or mobile already exists.");
+    }
+
+    // Update Client
+    client.companyName = companyName;
+    client.contactPerson = contactPerson;
+    client.email = email;
+    client.mobile = mobile;
+    client.gstNumber = gstNumber;
+    client.panNumber = panNumber;
+    client.website = website;
+    client.address = address;
+    client.city = city;
+    client.state = state;
+    client.country = country;
+    client.postalCode = postalCode;
+    client.creditLimit = creditLimit;
+    client.availableCredit = availableCredit;
+
+    await clientRepository.save(client);
+
+    // Update Owner
+    let clientOwner = await clientOwnerRepository.findOne({
+        where: {
+            client: {
+                clientId,
+            },
+        },
+        relations: [
+            "client",
+        ],
+    });
+
+    if (owner) {
+
+        if (clientOwner) {
+
+            clientOwner.firstName = owner.firstName;
+            clientOwner.lastName = owner.lastName;
+            clientOwner.email = owner.email;
+            clientOwner.mobile = owner.mobile;
+            clientOwner.designation = owner.designation;
+            clientOwner.panNumber = owner.panNumber;
+            clientOwner.aadhaarNumber = owner.aadhaarNumber;
+            clientOwner.dob = owner.dob;
+
+            await clientOwnerRepository.save(clientOwner);
+
+        } else {
+
+            clientOwner = clientOwnerRepository.create({
+                client,
+                firstName: owner.firstName,
+                lastName: owner.lastName,
+                email: owner.email,
+                mobile: owner.mobile,
+                designation: owner.designation,
+                panNumber: owner.panNumber,
+                aadhaarNumber: owner.aadhaarNumber,
+                dob: owner.dob,
+            });
+
+            await clientOwnerRepository.save(clientOwner);
+        }
+    }
+
+    // Update Login User
+    const user = await userRepository.findOne({
+        where: {
+            client: {
+                clientId,
+            },
+        },
+        relations: [
+            "client",
+        ],
+    });
+
+    if (user && owner) {
+
+        // Check duplicate owner email/mobile
+        const existingUser = await userRepository
+            .createQueryBuilder("user")
+            .where(
+                "(user.email = :email OR user.mobile = :mobile)",
+                {
+                    email: owner.email,
+                    mobile: owner.mobile,
+                }
+            )
+            .andWhere("user.userId != :userId", {
+                userId: user.userId,
+            })
+            .getOne();
+
+        if (existingUser) {
+            throw new Error("Owner email or mobile already exists.");
+        }
+
+        user.firstName = owner.firstName;
+        user.lastName = owner.lastName;
+        user.email = owner.email;
+        user.mobile = owner.mobile;
+
+        await userRepository.save(user);
+    }
+
+    // Activity
+    await createActivity(
+        `Client ${client.companyName} has been updated`,
+        ActivityType.CLIENT_UPDATED,
+        client.clientId,
+        undefined,
+        user?.userId
+    );
+
+    return {
+        message: "Client updated successfully.",
+        client,
+        owner: clientOwner,
+        user: user
+            ? {
+                userId: user.userId,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+            }
+            : null,
+    };
 };
 
-export const deleteClient = async (clientId: number) => {
+export const deleteClient = async (
+    clientId: number
+) => {
+
+    const client = await clientRepository.findOne({
+        where: {
+            clientId,
+            isActive: false,
+        },
+    });
+
+    if (!client) {
+        throw new Error("Client not found.");
+    }
+
     // Soft delete client
+    client.isActive = true;
+
+    await clientRepository.save(client);
+
+    // Soft delete owner
+    const clientOwner = await clientOwnerRepository.findOne({
+        where: {
+            client: {
+                clientId,
+            },
+            isActive: false,
+        },
+        relations: ["client"],
+    });
+
+    if (clientOwner) {
+        clientOwner.isActive = true;
+        await clientOwnerRepository.save(clientOwner);
+    }
+
+    // Soft delete login user
+    const user = await userRepository.findOne({
+        where: {
+            client: {
+                clientId,
+            },
+            isActive: false,
+        },
+        relations: ["client"],
+    });
+
+    if (user) {
+        user.isActive = true;
+        await userRepository.save(user);
+    }
+
+    // Activity
+    await createActivity(
+        `Client ${client.companyName} has been deleted`,
+        ActivityType.CLIENT_DELETED,
+        client.clientId,
+        undefined,
+        user?.userId
+    );
+
+    return {
+        message: "Client deleted successfully.",
+    };
 };
 
 export const generateClientCode = async () => {

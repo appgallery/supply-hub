@@ -56,3 +56,75 @@ export const getClients = async (
 
     }
 };
+
+export const updateClient = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const clientId = Number(req.query.clientId);
+
+        if (!clientId || isNaN(clientId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid clientId is required.",
+            });
+        }
+
+        const result = await clientService.updateClient(
+            clientId,
+            req.body
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {
+                client: result.client,
+                owner: result.owner,
+                user: result.user,
+            },
+        });
+
+    } catch (error: any) {
+
+        return res.status(400).json({
+            success: false,
+            message: error.message || "Failed to update client.",
+        });
+
+    }
+};
+
+export const deleteClient = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const clientId = Number(req.query.clientId);
+
+        if (!clientId || isNaN(clientId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid clientId is required.",
+            });
+        }
+
+        const result = await clientService.deleteClient(clientId);
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+        });
+
+    } catch (error: any) {
+
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+
+    }
+};

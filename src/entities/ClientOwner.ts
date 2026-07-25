@@ -38,6 +38,12 @@ export class ClientOwner {
     })
     dob: Date;
 
+    @Column({
+        type: "boolean",
+        default: true,
+    })
+    isActive: boolean;
+
     @CreateDateColumn()
     createdOn: Date;
 }

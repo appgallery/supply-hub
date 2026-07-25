@@ -6,6 +6,8 @@ const router = Router();
 
 router.post("/create-client" , authenticate,clientcontroller.createClient);
 router.get("/get-clients", authenticate , clientcontroller.getClients);
-// router.post("/refreshToken", authenticate , clientcontroller.refreshToken);
+router.put("/update-client", authenticate , clientcontroller.updateClient);
+router.delete("/delete-client", authenticate , clientcontroller.deleteClient);
+
 
 export default router;
