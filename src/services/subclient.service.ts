@@ -132,7 +132,7 @@ export const createSubClient = async (
     await userRepository.save(user);
 
     // Send email with temporaryPassword here
-    
+
     const fullName = `${user.firstName} ${user.lastName}`;
     const clientId = createdBy.client.clientId
     await createActivity(
@@ -214,18 +214,218 @@ export const getSubClients = async (clientId: number) => {
 export const getSubClientById = async (
     subClientId: number
 ) => {
-    // Fetch sub-client by ID
+
+    const subClient = await subClientRepository.findOne({
+        where: {
+            subClientId,
+            isActive: false,
+        },
+        relations: [
+            "client",
+            "createdBy",
+        ],
+    });
+
+    if (!subClient) {
+        throw new Error("Sub client not found.");
+    }
+
+    const user = await userRepository.findOne({
+        where: {
+            subClient: {
+                subClientId,
+            },
+            isActive: false,
+        },
+    });
+
+    return {
+        ...subClient,
+        user: user
+            ? {
+                userId: user.userId,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                mobile: user.mobile,
+            }
+            : null,
+    };
 };
 
 export const updateSubClient = async (
     subClientId: number,
     body: any
 ) => {
-    // Update sub-client
+
+    const {
+        companyName,
+        contactPerson,
+        email,
+        mobile,
+        gstNumber,
+        panNumber,
+        website,
+        address,
+        city,
+        state,
+        country,
+        postalCode,
+        creditLimit,
+        availableCredit,
+        owner,
+    } = body;
+
+    const subClient = await subClientRepository.findOne({
+        where: {
+            subClientId,
+            isActive: false,
+        },
+    });
+
+    if (!subClient) {
+        throw new Error("Sub client not found.");
+    }
+
+    const existingSubClient = await subClientRepository
+        .createQueryBuilder("subClient")
+        .where(
+            "(subClient.email = :email OR subClient.mobile = :mobile OR LOWER(subClient.companyName) = LOWER(:companyName))",
+            {
+                email,
+                mobile,
+                companyName,
+            }
+        )
+        .andWhere("subClient.subClientId != :subClientId", {
+            subClientId,
+        })
+        .getOne();
+
+    if (existingSubClient) {
+        throw new Error("Company name, email or mobile already exists.");
+    }
+
+    subClient.companyName = companyName;
+    subClient.contactPerson = contactPerson;
+    subClient.email = email;
+    subClient.mobile = mobile;
+    subClient.gstNumber = gstNumber;
+    subClient.panNumber = panNumber;
+    subClient.website = website;
+    subClient.address = address;
+    subClient.city = city;
+    subClient.state = state;
+    subClient.country = country;
+    subClient.postalCode = postalCode;
+    subClient.creditLimit = creditLimit;
+    subClient.availableCredit = availableCredit;
+
+    await subClientRepository.save(subClient);
+
+    const user = await userRepository.findOne({
+        where: {
+            subClient: {
+                subClientId,
+            },
+            isActive: false,
+        },
+        relations: ["subClient"],
+    });
+
+    if (user && owner) {
+
+        const existingUser = await userRepository
+            .createQueryBuilder("user")
+            .where(
+                "(user.email = :email OR user.mobile = :mobile)",
+                {
+                    email: owner.email,
+                    mobile: owner.mobile,
+                }
+            )
+            .andWhere("user.userId != :userId", {
+                userId: user.userId,
+            })
+            .getOne();
+
+        if (existingUser) {
+            throw new Error("Owner email or mobile already exists.");
+        }
+
+        user.firstName = owner.firstName;
+        user.lastName = owner.lastName;
+        user.email = owner.email;
+        user.mobile = owner.mobile;
+
+        await userRepository.save(user);
+    }
+
+    await createActivity(
+        `Sub Client ${subClient.companyName} has been updated`,
+        ActivityType.SUB_CLIENT_UPDATED,
+        undefined,
+        subClient.subClientId,
+        user?.userId
+    );
+
+    return {
+        message: "Sub client updated successfully.",
+        subClient,
+        user: user
+            ? {
+                userId: user.userId,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+            }
+            : null,
+    };
 };
 
 export const deleteSubClient = async (
     subClientId: number
 ) => {
-    // Soft delete sub-client
+
+    const subClient = await subClientRepository.findOne({
+        where: {
+            subClientId,
+            isActive: false,
+        },
+    });
+
+    if (!subClient) {
+        throw new Error("Sub client not found.");
+    }
+
+    subClient.isActive = true;
+
+    await subClientRepository.save(subClient);
+
+    const user = await userRepository.findOne({
+        where: {
+            subClient: {
+                subClientId,
+            },
+            isActive: false,
+        },
+        relations: ["subClient"],
+    });
+
+    if (user) {
+        user.isActive = true;
+        await userRepository.save(user);
+    }
+
+    await createActivity(
+        `Sub Client ${subClient.companyName} has been deleted`,
+        ActivityType.SUB_CLIENT_DELETED,
+        undefined,
+        subClient.subClientId,
+        user?.userId
+    );
+
+    return {
+        message: "Sub client deleted successfully.",
+    };
 };

@@ -45,3 +45,107 @@ export const getSubClients = async (
         });
     }
 };
+
+export const getSubClientById = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const subClientId = Number(req.query.subClientId);
+
+        if (!subClientId || isNaN(subClientId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid subClientId is required.",
+            });
+        }
+
+        const data = await subClientService.getSubClientById(subClientId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Sub client fetched successfully.",
+            data,
+        });
+
+    } catch (error: any) {
+
+        return res.status(400).json({
+            success: false,
+            message: error.message || "Failed to fetch sub client.",
+        });
+
+    }
+};
+
+export const updateSubClient = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const subClientId = Number(req.query.subClientId);
+
+        if (!subClientId || isNaN(subClientId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid subClientId is required.",
+            });
+        }
+
+        const result = await subClientService.updateSubClient(
+            subClientId,
+            req.body
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {
+                subClient: result.subClient,
+                user: result.user,
+            },
+        });
+
+    } catch (error: any) {
+
+        return res.status(400).json({
+            success: false,
+            message: error.message || "Failed to update sub client.",
+        });
+
+    }
+};
+
+export const deleteSubClient = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const subClientId = Number(req.query.subClientId);
+
+        if (!subClientId || isNaN(subClientId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid subClientId is required.",
+            });
+        }
+
+        const result = await subClientService.deleteSubClient(subClientId);
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+        });
+
+    } catch (error: any) {
+
+        return res.status(400).json({
+            success: false,
+            message: error.message || "Failed to delete sub client.",
+        });
+
+    }
+};
