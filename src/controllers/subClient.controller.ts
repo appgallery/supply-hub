@@ -46,7 +46,10 @@ export const getSubClients = async (
         return res.status(200).json({
             success: true,
             message: "Sub clients fetched successfully.",
-            data: result,
+            total: result.total,
+            offset: result.offset,
+            limit: result.limit,
+            data: result.data,
         });
 
     } catch (error: any) {
