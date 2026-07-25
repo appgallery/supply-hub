@@ -6,11 +6,17 @@ import { User } from "../entities/User";
 import { Role } from "../entities/Role";
 import { createActivity } from "../utils/helper";
 import { ActivityType } from "../utils/constants";
+import { ClientOwner } from "../entities/ClientOwner";
 const clientRepository = AppDataSource.getRepository(Client);
 const userRepository = AppDataSource.getRepository(User);
 const roleRepository = AppDataSource.getRepository(Role);
+const clientOwnerRepository = AppDataSource.getRepository(ClientOwner)
 
-export const createClient = async (body: any, createdByUserId: number) => {
+export const createClient = async (
+    body: any,
+    createdByUserId: number
+) => {
+
     const {
         companyName,
         clientCode,
@@ -29,6 +35,7 @@ export const createClient = async (body: any, createdByUserId: number) => {
         availableCredit,
         firstName,
         lastName,
+        owner,
     } = body;
 
     const createdBy = await userRepository.findOne({
@@ -41,7 +48,6 @@ export const createClient = async (body: any, createdByUserId: number) => {
     if (!createdBy) {
         throw new Error("Invalid user.");
     }
-
 
     if (createdBy.role.name !== "admin") {
         throw new Error("Only Admin can create clients.");
@@ -56,7 +62,10 @@ export const createClient = async (body: any, createdByUserId: number) => {
     }
 
     const existingUser = await userRepository.findOne({
-        where: [{ email }, { mobile }],
+        where: [
+            { email },
+            { mobile },
+        ],
     });
 
     if (existingUser) {
@@ -64,7 +73,10 @@ export const createClient = async (body: any, createdByUserId: number) => {
     }
 
     const existingClient = await clientRepository.findOne({
-        where: [{ clientCode }, { companyName }],
+        where: [
+            { companyName },
+            { clientCode },
+        ],
     });
 
     if (existingClient) {
@@ -81,7 +93,7 @@ export const createClient = async (body: any, createdByUserId: number) => {
         throw new Error("Client role not found.");
     }
 
-    // Generate temporary password
+    // Temporary password
     const temporaryPassword = crypto
         .randomBytes(6)
         .toString("base64")
@@ -93,6 +105,7 @@ export const createClient = async (body: any, createdByUserId: number) => {
         10
     );
 
+    // Create Client
     const client = clientRepository.create({
         companyName,
         clientCode,
@@ -109,12 +122,12 @@ export const createClient = async (body: any, createdByUserId: number) => {
         postalCode,
         creditLimit,
         availableCredit,
-        createdBy
+        createdBy,
     });
 
     await clientRepository.save(client);
 
-
+    // Create Login User
     const user = userRepository.create({
         firstName,
         lastName,
@@ -123,12 +136,34 @@ export const createClient = async (body: any, createdByUserId: number) => {
         password: hashedPassword,
         role,
         client,
-        isTemporaryPassword: true, // Add this column in User entity
-        createdBy
+        createdBy,
+        isTemporaryPassword: true,
     });
 
     await userRepository.save(user);
-    
+
+    // Create Owner
+    let clientOwner = null;
+
+    if (owner) {
+
+        clientOwner = clientOwnerRepository.create({
+            client,
+
+            firstName: owner.firstName,
+            lastName: owner.lastName,
+            email: owner.email,
+            mobile: owner.mobile,
+            designation: owner.designation,
+            panNumber: owner.panNumber,
+            aadhaarNumber: owner.aadhaarNumber,
+            dob: owner.dob,
+        });
+
+        await clientOwnerRepository.save(clientOwner);
+    }
+
+    // Activity
     await createActivity(
         `New Client ${client.companyName} has been added`,
         ActivityType.CLIENT_CREATED,
@@ -136,7 +171,7 @@ export const createClient = async (body: any, createdByUserId: number) => {
         undefined,
         user.userId
     );
-    // Send credentials via email
+
     /*
     await sendWelcomeEmail({
         to: email,
@@ -147,14 +182,19 @@ export const createClient = async (body: any, createdByUserId: number) => {
 
     return {
         message: "Client created successfully.",
+
         client,
+
+        owner: clientOwner,
+
         user: {
             userId: user.userId,
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
         },
-        temporaryPassword, // Remove this in production after email integration
+
+        temporaryPassword,
     };
 };
 export const getClients = async () => {

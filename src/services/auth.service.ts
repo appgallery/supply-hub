@@ -4,6 +4,7 @@ import { User } from "../entities/User";
 import { generateAccessToken } from "../utils/jwt";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { sendForgotPasswordOTP } from "./email.service";
 
 const userRepository = AppDataSource.getRepository(User);
 const refreshTokenRepository =
@@ -87,8 +88,15 @@ export const forgotPassword = async (body: any) => {
 
     await userRepository.save(user);
 
+    await sendForgotPasswordOTP(
+        user.email,
+        user.firstName || "User",
+        otp
+    );
+
     return {
-        message: "OTP sent successfully.",
+        "status": true,
+        "message": "OTP has been sent to your email.",
         data: `OPT is ${otp}`
     };
 };

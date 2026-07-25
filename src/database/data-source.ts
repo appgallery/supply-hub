@@ -16,6 +16,10 @@ import { ProductMedia } from "../entities/ProductMedia";
 import { Order } from "../entities/Order";
 import { OrderItem } from "../entities/OrderItem";
 import { ActivityLog } from "../entities/ActivityLog";
+import { ClientOwner } from "../entities/ClientOwner";
+import { Transaction } from "../entities/Transaction";
+import { Cart } from "../entities/Cart";
+import { CartItem } from "../entities/CartItem";
 
 dotenv.config();
 console.log({
@@ -49,6 +53,10 @@ export const AppDataSource = new DataSource({
         ProductMedia,
         Order,
         OrderItem,
-        ActivityLog
+        ActivityLog,
+        ClientOwner,
+        Transaction,
+        Cart,
+        CartItem
     ],
 });

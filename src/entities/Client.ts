@@ -8,6 +8,7 @@ import { BaseEntity } from "./BaseEntity";
 import { User } from "./User";
 import { SubClient } from "./SubClient";
 import { Product } from "./Product";
+import { ClientOwner } from "./ClientOwner";
 
 @Entity("clients")
 export class Client extends BaseEntity {
@@ -98,7 +99,13 @@ export class Client extends BaseEntity {
 
   @OneToMany(() => SubClient, (subClient) => subClient.client)
   subClients: SubClient[];
+  @OneToMany(
+    () => ClientOwner,
+    owner => owner.client,
+    { cascade: true }
+  )
+  owners: ClientOwner[];
 
-@OneToMany(() => Product, (product) => product.client)
-products: Product[];
+  @OneToMany(() => Product, (product) => product.client)
+  products: Product[];
 }

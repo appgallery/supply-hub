@@ -31,15 +31,22 @@ export const getClients = async (
     next: NextFunction
 ) => {
     try {
-        const result = await clientService.getClients();
 
-        return res.status(200).json(result);
-    } catch (error) {
+        const clients = await clientService.getClients();
+
+        return res.status(200).json({
+            status: true,
+            message: "Clients fetched successfully.",
+            data: clients,
+        });
+
+    } catch (error: any) {
+
         return res.status(500).json({
             status: false,
-            message:
-                error.message ||
-                "Internal server error"
+            message: error.message || "Internal server error",
+            data: null,
         });
+
     }
 };
