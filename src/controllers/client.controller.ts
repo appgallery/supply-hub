@@ -32,7 +32,13 @@ export const getClients = async (
 ) => {
     try {
 
-        const clients = await clientService.getClients();
+        const offset = Number(req.query.offset) || 0;
+        const limit = Number(req.query.limit) || 10;
+
+        const clients = await clientService.getClients(
+            offset,
+            limit
+        );
 
         return res.status(200).json({
             status: true,

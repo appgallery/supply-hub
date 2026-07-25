@@ -197,8 +197,12 @@ export const createClient = async (
         temporaryPassword,
     };
 };
-export const getClients = async () => {
-    const clients = await clientRepository.find({
+export const getClients = async (
+    offset: number = 0,
+    limit: number = 10
+) => {
+
+    const [clients, total] = await clientRepository.findAndCount({
         relations: ["users", "createdBy"],
         where: {
             isActive: true,
@@ -206,44 +210,51 @@ export const getClients = async () => {
         order: {
             createdAt: "DESC",
         },
+        skip: offset,
+        take: limit,
     });
 
-    return clients.map((client) => ({
-        clientId: client.clientId,
-        clientCode: client.clientCode,
-        companyName: client.companyName,
-        contactPerson: client.contactPerson,
-        email: client.email,
-        mobile: client.mobile,
-        gstNumber: client.gstNumber,
-        panNumber: client.panNumber,
-        website: client.website,
-        address: client.address,
-        city: client.city,
-        state: client.state,
-        country: client.country,
-        postalCode: client.postalCode,
-        creditLimit: client.creditLimit,
-        availableCredit: client.availableCredit,
-        createdAt: client.createdAt,
-        createdBy: client.createdBy
-            ? {
-                userId: client.createdBy.userId,
-                firstName: client.createdBy.firstName,
-                lastName: client.createdBy.lastName,
-            }
-            : null,
-        clientAdmin:
-            client.users.length > 0
+    return {
+        total,
+        offset,
+        limit,
+        data: clients.map((client) => ({
+            clientId: client.clientId,
+            clientCode: client.clientCode,
+            companyName: client.companyName,
+            contactPerson: client.contactPerson,
+            email: client.email,
+            mobile: client.mobile,
+            gstNumber: client.gstNumber,
+            panNumber: client.panNumber,
+            website: client.website,
+            address: client.address,
+            city: client.city,
+            state: client.state,
+            country: client.country,
+            postalCode: client.postalCode,
+            creditLimit: client.creditLimit,
+            availableCredit: client.availableCredit,
+            createdAt: client.createdAt,
+            createdBy: client.createdBy
                 ? {
-                    userId: client.users[0].userId,
-                    firstName: client.users[0].firstName,
-                    lastName: client.users[0].lastName,
-                    email: client.users[0].email,
-                    mobile: client.users[0].mobile,
+                    userId: client.createdBy.userId,
+                    firstName: client.createdBy.firstName,
+                    lastName: client.createdBy.lastName,
                 }
                 : null,
-    }));
+            clientAdmin:
+                client.users.length > 0
+                    ? {
+                        userId: client.users[0].userId,
+                        firstName: client.users[0].firstName,
+                        lastName: client.users[0].lastName,
+                        email: client.users[0].email,
+                        mobile: client.users[0].mobile,
+                    }
+                    : null,
+        })),
+    };
 };
 
 export const getClientById = async (clientId: number) => {
