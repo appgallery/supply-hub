@@ -512,7 +512,7 @@ export const deleteClient = async (
     });
 
     if (user) {
-        user.isActive = true;
+        user.isActive = false;
         await userRepository.save(user);
     }
 

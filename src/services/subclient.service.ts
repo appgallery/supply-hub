@@ -279,7 +279,7 @@ export const updateSubClient = async (
     const subClient = await subClientRepository.findOne({
         where: {
             subClientId,
-            isActive: false,
+            isActive: true,
         },
     });
 
@@ -390,7 +390,7 @@ export const deleteSubClient = async (
     const subClient = await subClientRepository.findOne({
         where: {
             subClientId,
-            isActive: false,
+            isActive: true,
         },
     });
 
@@ -398,7 +398,7 @@ export const deleteSubClient = async (
         throw new Error("Sub client not found.");
     }
 
-    subClient.isActive = true;
+    subClient.isActive = false;
 
     await subClientRepository.save(subClient);
 
@@ -413,7 +413,7 @@ export const deleteSubClient = async (
     });
 
     if (user) {
-        user.isActive = true;
+        user.isActive = false;
         await userRepository.save(user);
     }
 
