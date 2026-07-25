@@ -20,6 +20,7 @@ import { ClientOwner } from "../entities/ClientOwner";
 import { Transaction } from "../entities/Transaction";
 import { Cart } from "../entities/Cart";
 import { CartItem } from "../entities/CartItem";
+import { Category } from "../entities/Category";
 
 dotenv.config();
 console.log({
@@ -57,6 +58,7 @@ export const AppDataSource = new DataSource({
         ClientOwner,
         Transaction,
         Cart,
-        CartItem
+        CartItem,
+        Category
     ],
 });

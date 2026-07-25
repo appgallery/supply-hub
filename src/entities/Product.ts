@@ -11,20 +11,12 @@ import {
 
 import { Variant } from "./Variants";
 import { ProductMedia } from "./ProductMedia";
-import { SellerType } from "../utils/constants";
-import { Client } from "./Client";
+import { Category } from "./Category";
 
 @Entity("products")
 export class Product {
   @PrimaryGeneratedColumn()
   productId: number;
-
-  @ManyToOne(() => Client, {
-    nullable: false,
-    onDelete: "CASCADE",
-  })
-  @JoinColumn({ name: "clientId" })
-  client: Client;
 
   @Column({
     unique: true,
@@ -67,6 +59,13 @@ export class Product {
 
   @OneToMany(() => ProductMedia, (media) => media.product)
   media: ProductMedia[];
+
+  @ManyToOne(() => Category, {
+    nullable: false,
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "categoryId" })
+  category: Category;
 
   @Column()
   created_by: number;

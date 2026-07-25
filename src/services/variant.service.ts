@@ -15,124 +15,127 @@ export const userRepository = AppDataSource.getRepository(User);
 export const variantImageRepository = AppDataSource.getRepository(VariantImage)
 
 export const createVariant = async (
-  body: any,
-  userId: number
+    body: any,
+    userId: number
 ) => {
-  return await AppDataSource.transaction(async (manager) => {
-    const {
-      productId,
-      colorId,
-      sizeId,
-      name,
-      sku,
-      price,
-      discount_percentage = 0,
-      stock,
-      images = [],
-    } = body;
+    return await AppDataSource.transaction(async (manager) => {
+        const {
+            productId,
+            colorId,
+            sizeId,
+            name,
+            sku,
+            price,
+            discount_percentage = 0,
+            stock,
+            images = [],
+        } = body;
 
-    const user = await manager.findOne(User, {
-      where: { userId },
-      relations: ["client", "role"],
-    });
-
-    if (!user) {
-      throw new Error("User not found.");
-    }
-
-    if (
-      user.role.name !== Role.SUPER_ADMIN &&
-      user.role.name !== Role.CLIENT
-    ) {
-      throw new Error("You are not authorized.");
-    }
-
-    const product = await manager.findOne(Product, {
-      where: {
-        productId,
-      },
-      relations: ["client"],
-    });
-
-    if (!product) {
-      throw new Error("Product not found.");
-    }
-
-    if (
-      user.role.name === Role.CLIENT &&
-      product.client.clientId !== user.client.clientId
-    ) {
-      throw new Error("Unauthorized.");
-    }
-
-    const existingSku = await manager.findOne(Variant, {
-      where: {
-        sku,
-      },
-    });
-
-    if (existingSku) {
-      throw new Error("SKU already exists.");
-    }
-
-    const color = colorId
-      ? await manager.findOne(Color, {
-          where: { colorId },
-        })
-      : null;
-
-    const size = sizeId
-      ? await manager.findOne(Size, {
-          where: { sizeId },
-        })
-      : null;
-
-    const discounted_price =
-      Number(price) -
-      (Number(price) * Number(discount_percentage)) / 100;
-
-    const variant = manager.create(Variant, {
-      product,
-      color,
-      size,
-      name,
-      sku,
-      price,
-      discount_percentage,
-      discounted_price,
-      stock,
-      created_by: userId,
-    });
-
-    const savedVariant = await manager.save(variant);
-
-    // Create Variant Images
-    if (images.length) {
-      for (const item of images) {
-        const variantImage = manager.create(VariantImage, {
-          variant: savedVariant,
-          image_url: item.image_url,
-          alt_text: item.alt_text,
-          is_thumbnail: item.is_thumbnail ?? false,
-          created_by: userId,
+        const user = await manager.findOne(User, {
+            where: { userId },
+            relations: ["client", "role"],
         });
 
-        await manager.save(variantImage);
-      }
-    }
+        if (!user) {
+            throw new Error("User not found.");
+        }
 
-    return await manager.findOne(Variant, {
-      where: {
-        variantId: savedVariant.variantId,
-      },
-      relations: [
-        "product",
-        "color",
-        "size",
-        "variantImages",
-      ],
+        if (
+            user.role.name !== Role.SUPER_ADMIN &&
+            user.role.name !== Role.CLIENT
+        ) {
+            throw new Error("You are not authorized.");
+        }
+
+        const product = await manager.findOne(Product, {
+            where: {
+                productId,
+            },
+            relations: [
+                "category",
+                "category.client",
+            ],
+        });
+
+        if (!product) {
+            throw new Error("Product not found.");
+        }
+
+        if (
+            user.role.name === Role.CLIENT &&
+            product.category.client.clientId !== user.client.clientId
+        ) {
+            throw new Error("Unauthorized.");
+        }
+
+        const existingSku = await manager.findOne(Variant, {
+            where: {
+                sku,
+            },
+        });
+
+        if (existingSku) {
+            throw new Error("SKU already exists.");
+        }
+
+        const color = colorId
+            ? await manager.findOne(Color, {
+                where: { colorId },
+            })
+            : null;
+
+        const size = sizeId
+            ? await manager.findOne(Size, {
+                where: { sizeId },
+            })
+            : null;
+
+        const discounted_price =
+            Number(price) -
+            (Number(price) * Number(discount_percentage)) / 100;
+
+        const variant = manager.create(Variant, {
+            product,
+            color,
+            size,
+            name,
+            sku,
+            price,
+            discount_percentage,
+            discounted_price,
+            stock,
+            created_by: userId,
+        });
+
+        const savedVariant = await manager.save(variant);
+
+        // Create Variant Images
+        if (images.length) {
+            for (const item of images) {
+                const variantImage = manager.create(VariantImage, {
+                    variant: savedVariant,
+                    image_url: item.image_url,
+                    alt_text: item.alt_text,
+                    is_thumbnail: item.is_thumbnail ?? false,
+                    created_by: userId,
+                });
+
+                await manager.save(variantImage);
+            }
+        }
+
+        return await manager.findOne(Variant, {
+            where: {
+                variantId: savedVariant.variantId,
+            },
+            relations: [
+                "product",
+                "color",
+                "size",
+                "variantImages",
+            ],
+        });
     });
-  });
 };
 
 export const getVariants = async (
@@ -172,13 +175,17 @@ export const getVariants = async (
         where: {
             product: {
                 productId,
-                client: {
-                    clientId: user.client.clientId,
+                category: {
+                    client: {
+                        clientId: user.client.clientId,
+                    },
                 },
             },
         },
         relations: [
             "product",
+            "product.category",
+            "product.category.client",
             "variantImages",
             "color",
             "size",
@@ -216,13 +223,17 @@ export const getVariantById = async (
             where: {
                 variantId,
                 product: {
-                    client: {
-                        clientId: user.client.clientId,
+                    category: {
+                        client: {
+                            clientId: user.client.clientId,
+                        },
                     },
                 },
             },
             relations: [
                 "product",
+                "product.category",
+                "product.category.client",
                 "variantImages",
                 "color",
                 "size",
@@ -246,7 +257,11 @@ export const updateVariant = async (
         where: {
             variantId,
         },
-        relations: ["product", "product.client"],
+        relations: [
+            "product",
+            "product.category",
+            "product.category.client",
+        ],
     });
 
     if (!variant) {
@@ -266,7 +281,7 @@ export const updateVariant = async (
 
     if (
         user.role.name === Role.CLIENT &&
-        variant.product.client.clientId !== user.client.clientId
+        variant.product.category.client.clientId !== user.client.clientId
     ) {
         throw new Error("Unauthorized.");
     }
@@ -350,14 +365,40 @@ export const deleteVariant = async (
     variantId: number,
     userId: number
 ) => {
+
     const variant = await variantRepository.findOne({
         where: {
             variantId,
         },
+        relations: [
+            "product",
+            "product.category",
+            "product.category.client",
+        ],
     });
 
     if (!variant) {
         throw new Error("Variant not found.");
+    }
+
+    // Logged-in user
+    const user = await userRepository.findOne({
+        where: {
+            userId,
+        },
+        relations: ["client", "role"],
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    // Client can delete only their own variants
+    if (
+        user.role.name === Role.CLIENT &&
+        variant.product.category.client.clientId !== user.client.clientId
+    ) {
+        throw new Error("Unauthorized.");
     }
 
     variant.is_active = false;

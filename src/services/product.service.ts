@@ -11,10 +11,12 @@ import { Client } from "../entities/Client";
 import { VariantImage } from "../entities/VariantImage";
 import { Variant } from "../entities/Variants";
 import { createActivity } from "../utils/helper";
+import { Category } from "../entities/Category";
 
 const productRepository = AppDataSource.getRepository(Product);
 const userRepository = AppDataSource.getRepository(User);
-const clientRepository = AppDataSource.getRepository(Client)
+const clientRepository = AppDataSource.getRepository(Client);
+const categoryRepository = AppDataSource.getRepository(Category);
 
 export const createProduct = async (
     body: any,
@@ -27,7 +29,7 @@ export const createProduct = async (
             base_price,
             discount_percentage = 0,
             currency = "AUD",
-            clientId,
+            categoryId,
             media = [],
             variants = [],
         } = body;
@@ -41,35 +43,35 @@ export const createProduct = async (
             throw new Error("User not found.");
         }
 
-        if (
-            user.role.name !== Role.SUPER_ADMIN &&
-            user.role.name !== Role.CLIENT
-        ) {
-            throw new Error("You are not authorized.");
-        }
+        const category = await manager.findOne(Category, {
+            where: {
+                categoryId,
+            },
+            relations: ["client"],
+        });
 
-        let client;
+        if (!category) {
+            throw new Error("Category not found.");
+        }
 
         if (user.role.name === Role.SUPER_ADMIN) {
-            client = await manager.findOne(Client, {
-                where: { clientId },
-            });
-
-            if (!client) {
-                throw new Error("Client not found.");
+            if (!category.client) {
+                throw new Error("Invalid category.");
             }
         } else {
-            client = user.client;
+            if (category.client.clientId !== user.client.clientId) {
+                throw new Error("You are not allowed to use this category.");
+            }
         }
-        console.log("client", client)
+
         const duplicate = await manager.findOne(Product, {
             where: {
                 productName,
-                client: {
-                    clientId: client.clientId,
+                category: {
+                    categoryId,
                 },
             },
-            relations: ["client"],
+            relations: ["category"],
         });
         console.log("duplicate", duplicate)
         if (duplicate) {
@@ -89,13 +91,15 @@ export const createProduct = async (
             discount_percentage,
             discounted_price,
             currency,
-            client,
+            category,
             created_by: user.userId,
         });
 
         const savedProduct = await manager.save(product);
+        const client = category.client;
 
         const fullName = `${user.firstName} ${user.lastName}`;
+
         await createActivity(
             `New Product "${product.productName}" has been added by ${fullName}.`,
             ActivityType.PRODUCT_CREATED,
@@ -189,7 +193,8 @@ export const createProduct = async (
                 productId: savedProduct.productId,
             },
             relations: [
-                "client",
+                "category",
+                "category.client",
                 "media",
                 "variants",
                 "variants.variantImages",
@@ -229,7 +234,12 @@ export const getProducts = async (userId: number) => {
 
     if (user.role.name === Role.SUPER_ADMIN) {
         return await productRepository.find({
-            relations: ["client", "variants", "media"],
+            relations: [
+                "category",
+                "category.client",
+                "variants",
+                "media"
+            ],
             order: {
                 productId: "DESC",
             },
@@ -238,8 +248,10 @@ export const getProducts = async (userId: number) => {
 
     return await productRepository.find({
         where: {
-            client: {
-                clientId: user.client.clientId,
+            category: {
+                client: {
+                    clientId: user.client.clientId,
+                },
             },
             is_active: true,
         },
@@ -274,12 +286,19 @@ export const getProductById = async (
         product = await productRepository.findOne({
             where: {
                 productId,
-                client: {
-                    clientId: user.client.clientId,
+                category: {
+                    client: {
+                        clientId: user.client.clientId,
+                    },
                 },
                 is_active: true,
             },
-            relations: ["client", "variants", "media"],
+            relations: [
+                "category",
+                "category.client",
+                "variants",
+                "media"
+            ]
         });
     }
 
@@ -316,17 +335,19 @@ export const updateProduct = async (
     if (user.role.name === Role.SUPER_ADMIN) {
         product = await productRepository.findOne({
             where: { productId },
-            relations: ["client"],
+            relations: ["category"],
         });
     } else {
         product = await productRepository.findOne({
             where: {
                 productId,
-                client: {
-                    clientId: user.client.clientId,
+                category: {
+                    client: {
+                        clientId: user.client.clientId,
+                    },
                 },
             },
-            relations: ["client"],
+            relations: ["category"],
         });
     }
 
@@ -334,7 +355,20 @@ export const updateProduct = async (
         throw new Error("Product not found.");
     }
 
-    Object.assign(product, body);
+    if (body.categoryId) {
+
+        const category = await categoryRepository.findOne({
+            where: {
+                categoryId: body.categoryId,
+            },
+        });
+
+        if (!category) {
+            throw new Error("Category not found.");
+        }
+
+        product.category = category;
+    }
 
     product.discounted_price =
         Number(product.base_price) -
@@ -379,11 +413,13 @@ export const deleteProduct = async (
         product = await productRepository.findOne({
             where: {
                 productId,
-                client: {
-                    clientId: user.client.clientId,
-                },
+                category: {
+                    client: {
+                        clientId: user.client.clientId,
+                    },
+                }
             },
-            relations: ["client"],
+            relations: ["category"],
         });
     }
 

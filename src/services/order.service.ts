@@ -490,8 +490,10 @@ export const getClientDashboard = async (
 
     const currentProducts = await productRepository.count({
         where: {
-            client: {
-                clientId: user.client.clientId,
+            category: {
+                client: {
+                    clientId: user.client.clientId,
+                },
             },
             created_at: Between(startCurrentMonth, now),
         },
@@ -499,8 +501,10 @@ export const getClientDashboard = async (
 
     const lastMonthProducts = await productRepository.count({
         where: {
-            client: {
-                clientId: user.client.clientId,
+            category: {
+                client: {
+                    clientId: user.client.clientId,
+                },
             },
             created_at: Between(startLastMonth, endLastMonth),
         },
@@ -571,8 +575,10 @@ export const getClientDashboard = async (
 
     const totalProducts = await productRepository.count({
         where: {
-            client: {
-                clientId: user.client.clientId,
+            category: {
+                client: {
+                    clientId: user.client.clientId,
+                },
             },
         },
     });
