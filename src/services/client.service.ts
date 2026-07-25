@@ -480,7 +480,7 @@ export const deleteClient = async (
     }
 
     // Soft delete client
-    client.isActive = true;
+    client.isActive = false;
 
     await clientRepository.save(client);
 
