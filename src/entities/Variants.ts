@@ -13,6 +13,7 @@ import { Product } from "./Product";
 import { VariantImage } from "./VariantImage";
 import { Color } from "./Color";
 import { Size } from "./Size";
+import { VariantTechnicalDetail } from "./variantTechnicalDetails";
 
 @Entity("variants")
 export class Variant {
@@ -74,6 +75,13 @@ export class Variant {
     }
   )
   variantImages: VariantImage[];
+
+  @OneToMany(
+    () => VariantTechnicalDetail,
+    detail => detail.variant,
+    { cascade: true }
+  )
+  technicalDetails: VariantTechnicalDetail[];
 
   @Column()
   created_by: number;

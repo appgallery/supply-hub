@@ -5,6 +5,7 @@ import { Size } from "../entities/Size";
 import { User } from "../entities/User";
 import { VariantImage } from "../entities/VariantImage";
 import { Variant } from "../entities/Variants";
+import { VariantTechnicalDetail } from "../entities/variantTechnicalDetails";
 import { Role } from "../utils/constants";
 
 export const productRepository = AppDataSource.getRepository(Product);
@@ -12,7 +13,8 @@ export const variantRepository = AppDataSource.getRepository(Variant);
 export const colorRepository = AppDataSource.getRepository(Color);
 export const sizeRepository = AppDataSource.getRepository(Size);
 export const userRepository = AppDataSource.getRepository(User);
-export const variantImageRepository = AppDataSource.getRepository(VariantImage)
+export const variantImageRepository = AppDataSource.getRepository(VariantImage);
+export const variantTechnicalDetailRepository = AppDataSource.getRepository(VariantTechnicalDetail);
 
 export const createVariant = async (
     body: any,
@@ -29,6 +31,7 @@ export const createVariant = async (
             discount_percentage = 0,
             stock,
             images = [],
+            technicalDetails = [],
         } = body;
 
         const user = await manager.findOne(User, {
@@ -109,6 +112,21 @@ export const createVariant = async (
 
         const savedVariant = await manager.save(variant);
 
+        if (technicalDetails.length) {
+            for (const item of technicalDetails) {
+                const variantTechnicalDetail = manager.create(
+                    VariantTechnicalDetail,
+                    {
+                        variant: savedVariant,
+                        key: item.key,
+                        value: item.value,
+                    }
+                );
+
+                await manager.save(variantTechnicalDetail);
+            }
+        }
+
         // Create Variant Images
         if (images.length) {
             for (const item of images) {
@@ -133,6 +151,7 @@ export const createVariant = async (
                 "color",
                 "size",
                 "variantImages",
+                "technicalDetails",
             ],
         });
     });
@@ -253,99 +272,154 @@ export const updateVariant = async (
     body: any,
     userId: number
 ) => {
-    const variant = await variantRepository.findOne({
-        where: {
-            variantId,
-        },
-        relations: [
-            "product",
-            "product.category",
-            "product.category.client",
-        ],
-    });
+    return await AppDataSource.transaction(async (manager) => {
 
-    if (!variant) {
-        throw new Error("Variant not found.");
-    }
-
-    const user = await userRepository.findOne({
-        where: {
-            userId,
-        },
-        relations: ["client", "role"],
-    });
-
-    if (!user) {
-        throw new Error("User not found.");
-    }
-
-    if (
-        user.role.name === Role.CLIENT &&
-        variant.product.category.client.clientId !== user.client.clientId
-    ) {
-        throw new Error("Unauthorized.");
-    }
-
-    if (body.colorId) {
-        variant.color = await colorRepository.findOne({
+        const variant = await manager.findOne(Variant, {
             where: {
-                colorId: body.colorId,
+                variantId,
             },
+            relations: [
+                "product",
+                "product.category",
+                "product.category.client",
+                "color",
+                "size",
+                "variantImages",
+                "technicalDetails",
+            ],
         });
-    }
 
-    if (body.sizeId) {
-        variant.size = await sizeRepository.findOne({
+        if (!variant) {
+            throw new Error("Variant not found.");
+        }
+
+        const user = await manager.findOne(User, {
             where: {
-                sizeId: body.sizeId,
+                userId,
             },
+            relations: ["client", "role"],
         });
-    }
 
-    Object.assign(variant, body);
+        if (!user) {
+            throw new Error("User not found.");
+        }
 
-    variant.discounted_price =
-        Number(variant.price) -
-        (Number(variant.price) *
-            Number(variant.discount_percentage)) /
-        100;
+        if (
+            user.role.name !== Role.SUPER_ADMIN &&
+            user.role.name !== Role.CLIENT
+        ) {
+            throw new Error("Unauthorized.");
+        }
 
-    variant.updated_by = userId;
+        if (
+            user.role.name === Role.CLIENT &&
+            variant.product.category.client.clientId !== user.client.clientId
+        ) {
+            throw new Error("Unauthorized.");
+        }
 
-    await variantRepository.save(variant);
+        // ================= Color =================
 
-    if (body.images?.length) {
-        for (const item of body.images) {
-            if (item.variantImageId) {
-                // Update existing image
-                const existingImage = await variantImageRepository.findOne({
-                    where: {
-                        variantImageId: item.variantImageId,
-                        variant: {
-                            variantId: variant.variantId,
-                        },
-                    },
-                    relations: ["variant"],
-                });
+        if (body.colorId) {
+            const color = await manager.findOne(Color, {
+                where: {
+                    colorId: body.colorId,
+                },
+            });
 
-                if (!existingImage) {
-                    throw new Error(
-                        `Variant image ${item.variantImageId} not found.`
-                    );
-                }
+            if (!color) {
+                throw new Error("Color not found.");
+            }
 
-                existingImage.image_url =
-                    item.image_url ?? existingImage.image_url;
-                existingImage.alt_text =
-                    item.alt_text ?? existingImage.alt_text;
-                existingImage.is_thumbnail =
-                    item.is_thumbnail ?? existingImage.is_thumbnail;
-                existingImage.updated_by = userId;
+            variant.color = color;
+        }
 
-                await variantImageRepository.save(existingImage);
-            } else {
-                // Create new image
-                const newImage = variantImageRepository.create({
+        // ================= Size =================
+
+        if (body.sizeId) {
+            const size = await manager.findOne(Size, {
+                where: {
+                    sizeId: body.sizeId,
+                },
+            });
+
+            if (!size) {
+                throw new Error("Size not found.");
+            }
+
+            variant.size = size;
+        }
+
+        // ================= SKU Check =================
+
+        if (body.sku && body.sku !== variant.sku) {
+            const existingSku = await manager.findOne(Variant, {
+                where: {
+                    sku: body.sku,
+                },
+            });
+
+            if (existingSku) {
+                throw new Error("SKU already exists.");
+            }
+
+            variant.sku = body.sku;
+        }
+
+        // ================= Update Variant =================
+
+        variant.name = body.name ?? variant.name;
+        variant.price = body.price ?? variant.price;
+        variant.stock = body.stock ?? variant.stock;
+        variant.discount_percentage =
+            body.discount_percentage ??
+            variant.discount_percentage;
+
+        variant.discounted_price =
+            Number(variant.price) -
+            (Number(variant.price) *
+                Number(variant.discount_percentage)) /
+            100;
+
+        variant.updated_by = userId;
+
+        await manager.save(variant);
+
+        // ================= Variant Technical Details =================
+
+        if (body.technicalDetails) {
+            await manager.delete(VariantTechnicalDetail, {
+                variant: {
+                    variantId: variant.variantId,
+                },
+            });
+
+            for (const item of body.technicalDetails) {
+                const technicalDetail =
+                    manager.create(VariantTechnicalDetail, {
+                        variant,
+                        key: item.key,
+                        value: item.value,
+                    });
+
+                await manager.save(technicalDetail);
+            }
+        }
+
+        // ================= Variant Images =================
+
+        if (body.images) {
+
+            // Remove old images
+            await manager.delete(VariantImage, {
+                variant: {
+                    variantId: variant.variantId,
+                },
+            });
+
+            // Add new images
+            for (const item of body.images) {
+                const image = manager.create(VariantImage, {
                     variant,
                     image_url: item.image_url,
                     alt_text: item.alt_text,
@@ -353,12 +427,25 @@ export const updateVariant = async (
                     created_by: userId,
                 });
 
-                await variantImageRepository.save(newImage);
+                await manager.save(image);
             }
         }
-    }
 
-    return variant;
+        // ================= Return Updated Variant =================
+
+        return await manager.findOne(Variant, {
+            where: {
+                variantId: variant.variantId,
+            },
+            relations: [
+                "product",
+                "color",
+                "size",
+                "variantImages",
+                "technicalDetails",
+            ],
+        });
+    });
 };
 
 export const deleteVariant = async (

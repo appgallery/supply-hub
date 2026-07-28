@@ -13,6 +13,7 @@ import { Variant } from "./Variants";
 import { ProductMedia } from "./ProductMedia";
 import { Category } from "./Category";
 import { Client } from "./Client";
+import { ProductTechnicalDetail } from "./ProductTechnicalDetails";
 
 @Entity("products")
 export class Product {
@@ -74,6 +75,13 @@ export class Product {
   })
   @JoinColumn({ name: "categoryId" })
   category: Category;
+
+  @OneToMany(
+    () => ProductTechnicalDetail,
+    detail => detail.product,
+    { cascade: true }
+  )
+  technicalDetails: ProductTechnicalDetail[];
 
   @Column()
   created_by: number;
