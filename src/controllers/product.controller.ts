@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createProduct, deleteProduct, getProductById, getProducts, updateProduct } from "../services/product.service"
+import { createProduct, deleteProduct, getDealerProducts, getProductById, getProducts, updateProduct } from "../services/product.service"
 
 export const createProductController = async (
     req: Request, res: Response
@@ -78,6 +78,27 @@ export const getProductByIdController = async (
     }
 }
 
+export const getDealerProductsController = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const userId = (req as any).user.userId;
+
+        const response = await getDealerProducts(userId);
+
+        return res.status(200).json({
+            status: true,
+            data: response,
+        });
+
+    } catch (error: any) {
+        return res.status(500).json({
+            status: false,
+            message: error.message,
+        });
+    }
+};
 export const updateProductController = async (
     req: Request, res: Response
 ) => {

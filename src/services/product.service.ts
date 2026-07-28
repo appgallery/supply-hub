@@ -279,6 +279,7 @@ export const getProducts = async (
         },
     });
 };
+
 export const getProductById = async (
     productId: number,
     userId: number
@@ -324,6 +325,39 @@ export const getProductById = async (
     }
 
     return product;
+};
+
+export const getDealerProducts = async (userId: number) => {
+    const user = await userRepository.findOne({
+        where: { userId },
+        relations: ["client", "role"],
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    if (!user.client) {
+        throw new Error("Client not assigned to this dealer.");
+    }
+
+    return await productRepository.find({
+        where: {
+            client: {
+                clientId: user.client.clientId,
+            },
+            is_active: true,
+        },
+        relations: [
+            "client",
+            "category",
+            "variants",
+            "media",
+        ],
+        order: {
+            productId: "DESC",
+        },
+    });
 };
 
 export const updateProduct = async (
