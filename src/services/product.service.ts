@@ -318,13 +318,49 @@ export const getProducts = async (
         .createQueryBuilder("product")
         .leftJoinAndSelect("product.category", "category")
         .leftJoinAndSelect("category.client", "client")
-        .leftJoinAndSelect("product.technicalDetails", "productTechnicalDetails")
-        .leftJoinAndSelect("product.variants", "variants")
-        .leftJoinAndSelect("variants.color", "color")
-        .leftJoinAndSelect("variants.size", "size")
-        .leftJoinAndSelect("variants.variantImages", "variantImages")
-        .leftJoinAndSelect("variants.technicalDetails", "variantTechnicalDetails")
-        .leftJoinAndSelect("product.media", "media")
+
+        // Product details
+        .leftJoinAndSelect(
+            "product.technicalDetails",
+            "productTechnicalDetails"
+        )
+        .leftJoinAndSelect(
+            "product.wholesalePriceTiers",
+            "productWholesalePriceTiers"
+        )
+
+        // Variants
+        .leftJoinAndSelect(
+            "product.variants",
+            "variants"
+        )
+        .leftJoinAndSelect(
+            "variants.color",
+            "color"
+        )
+        .leftJoinAndSelect(
+            "variants.size",
+            "size"
+        )
+        .leftJoinAndSelect(
+            "variants.variantImages",
+            "variantImages"
+        )
+        .leftJoinAndSelect(
+            "variants.technicalDetails",
+            "variantTechnicalDetails"
+        )
+        .leftJoinAndSelect(
+            "variants.wholesalePriceTiers",
+            "variantWholesalePriceTiers"
+        )
+
+        // Product media
+        .leftJoinAndSelect(
+            "product.media",
+            "media"
+        )
+
         .where("product.is_active = :active", {
             active: true,
         });
