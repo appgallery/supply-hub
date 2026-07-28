@@ -59,7 +59,7 @@ export class Product {
   variants: Variant[];
 
   @ManyToOne(() => Client, (client) => client.products, {
-    nullable: false,
+    nullable: true,
     onDelete: "CASCADE",
   })
   @JoinColumn({ name: "clientId" })

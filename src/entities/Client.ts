@@ -107,5 +107,5 @@ export class Client extends BaseEntity {
   owners: ClientOwner[];
 
   @OneToMany(() => Product, (product) => product.client)
-products: Product[];
+  products: Product[];
 }
