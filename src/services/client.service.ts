@@ -20,6 +20,8 @@ export const createClient = async (
     const {
         companyName,
         contactPerson,
+        businessType,
+        registrationNumber,
         email,
         mobile,
         gstNumber,
@@ -111,6 +113,8 @@ export const createClient = async (
     const client = clientRepository.create({
         companyName,
         clientCode,
+        businessType,
+        registrationNumber,
         contactPerson,
         email,
         mobile,
@@ -230,6 +234,8 @@ export const getClients = async (
             clientId: client.clientId,
             clientCode: client.clientCode,
             companyName: client.companyName,
+            businessType: client.businessType,
+            registrationNumber: client.registrationNumber,
             contactPerson: client.contactPerson,
             email: client.email,
             mobile: client.mobile,

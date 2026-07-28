@@ -79,6 +79,16 @@ export class Client extends BaseEntity {
   postalCode: string;
 
   @Column({
+    nullable: true,
+  })
+  businessType: string;
+
+  @Column({
+    nullable: true,
+  })
+  registrationNumber: string;
+
+  @Column({
     type: "decimal",
     precision: 12,
     scale: 2,
