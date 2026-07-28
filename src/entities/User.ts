@@ -72,13 +72,16 @@ export class User extends BaseEntity {
     })
     otp: string;
 
+    @Column({ default: false })
+    isOtpVerified: boolean;
+
     @Column({
         type: "timestamp",
         nullable: true,
     })
     otpExpiry: Date;
 
-        @Column({
+    @Column({
         type: "boolean",
         default: true,
     })

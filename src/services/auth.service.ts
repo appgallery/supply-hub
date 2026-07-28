@@ -86,6 +86,8 @@ export const forgotPassword = async (body: any) => {
     user.otp = otp;
     user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
+    user.isOtpVerified = false;
+
     await userRepository.save(user);
 
     await sendForgotPasswordOTP(
@@ -101,8 +103,8 @@ export const forgotPassword = async (body: any) => {
     };
 };
 
-export const resetPassword = async (body: any) => {
-    const { email, otp, password } = body;
+export const verifyResetOtp = async (body: any) => {
+    const { email, otp } = body;
 
     const user = await userRepository.findOne({
         where: { email },
@@ -117,20 +119,54 @@ export const resetPassword = async (body: any) => {
     }
 
     if (!user.otpExpiry || user.otpExpiry < new Date()) {
-        throw new Error("OTP has expired.");
+        throw new Error("OTP expired.");
     }
 
-    user.password = await bcrypt.hash(password, 10);
+    user.isOtpVerified = true;
 
     user.otp = null as any;
     user.otpExpiry = null as any;
 
-    // Password is now user-defined
-    user.isTemporaryPassword = false;
-
     await userRepository.save(user);
 
     return {
-        message: "Password reset successfully.",
+        message: "OTP verified successfully."
+    };
+};
+
+export const resetPassword = async (body: any) => {
+
+    const { email, password } = body;
+
+    const user = await userRepository.findOne({
+        where: { email },
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+
+    if (!user.isOtpVerified) {
+        throw new Error("Please verify OTP first.");
+    }
+
+
+    user.password = await bcrypt.hash(
+        password,
+        10
+    );
+
+    user.isTemporaryPassword = false;
+
+    // reset verification status
+    user.isOtpVerified = false;
+
+
+    await userRepository.save(user);
+
+
+    return {
+        message: "Password reset successfully."
     };
 };

@@ -11,6 +11,7 @@ export const login = async (
 
         return res.status(200).json({
             status:true,
+            message:"Login successfully..."
             ...result
             
         });
@@ -59,12 +60,30 @@ export const forgotPassword = async (req: Request, res: Response) => {
     }
 };
 
+export const verifyResetOtpController = async (req: Request, res: Response) => {
+    try {
+        const data = await authService.verifyResetOtp(req.body);
+
+        return res.status(200).json({
+            status: true,
+            message:"Otp verified.",
+            ...data,
+        });
+    } catch (error: any) {
+        return res.status(400).json({
+            status: false,
+            message: error.message,
+        });
+    }
+};
+
 export const resetPassword = async (req: Request, res: Response) => {
     try {
         const data = await authService.resetPassword(req.body);
 
         return res.status(200).json({
             status: true,
+            message:"Password reset successfully...",
             ...data,
         });
     } catch (error: any) {

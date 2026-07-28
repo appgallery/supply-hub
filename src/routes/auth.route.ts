@@ -7,6 +7,7 @@ const router = Router();
 router.post("/login" , authcontroller.login);
 router.post("/logout", authenticate , authcontroller.logout);
 router.post("/forgot-password", authcontroller.forgotPassword);
+router.post("/verify-otp", authcontroller.verifyResetOtpController);
 router.post("/reset-password", authcontroller.resetPassword);
 
 export default router;
