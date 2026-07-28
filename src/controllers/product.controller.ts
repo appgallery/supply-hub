@@ -84,7 +84,7 @@ export const getDealerProductsController = async (
 ) => {
     try {
         const userId = (req as any).user.userId;
-
+console.log("userId",userId)
         const response = await getDealerProducts(userId);
 
         return res.status(200).json({
