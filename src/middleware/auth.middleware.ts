@@ -15,7 +15,7 @@ export const authenticate = (
 
     if (!authHeader?.startsWith("Bearer ")) {
       return res.status(401).json({
-        success: false,
+        status: false,
         message: "Unauthorized",
       });
     }
@@ -32,7 +32,7 @@ export const authenticate = (
     next();
   } catch (error) {
     return res.status(401).json({
-      success: false,
+      status: false,
       message: "Invalid Token",
     });
   }
