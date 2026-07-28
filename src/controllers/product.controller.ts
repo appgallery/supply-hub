@@ -21,11 +21,31 @@ export const createProductController = async (
 }
 
 export const getProductController = async (
-    req: Request, res: Response
+    req: Request,
+    res: Response
 ) => {
     try {
         const userId = (req as any).user.userId;
-        const response = await getProducts(userId);
+
+        const categoryId = req.query.categoryId
+            ? Number(req.query.categoryId)
+            : undefined;
+
+        const sortBy = (req.query.sortBy as
+            | "productId"
+            | "name"
+            | "createdAt") || "productId";
+
+        const sortOrder = (req.query.sortOrder as
+            | "ASC"
+            | "DESC") || "DESC";
+
+        const response = await getProducts(
+            userId,
+            categoryId,
+            sortBy,
+            sortOrder
+        );
 
         return res.status(200).json({
             status: true,
@@ -37,7 +57,7 @@ export const getProductController = async (
             message: error.message,
         });
     }
-}
+};
 
 export const getProductByIdController = async (
     req: Request, res: Response

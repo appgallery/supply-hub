@@ -223,7 +223,12 @@ export const generateProductCode = async () => {
     return `PRD${String(lastNumber + 1).padStart(6, "0")}`;
 }
 
-export const getProducts = async (userId: number) => {
+export const getProducts = async (
+    userId: number,
+    categoryId?: number,
+    sortBy: "productId" | "name" | "createdAt" = "productId",
+    sortOrder: "ASC" | "DESC" = "DESC"
+) => {
     const user = await userRepository.findOne({
         where: { userId },
         relations: ["client", "role"],
@@ -233,36 +238,47 @@ export const getProducts = async (userId: number) => {
         throw new Error("User not found.");
     }
 
-    if (user.role.name === Role.SUPER_ADMIN) {
-        return await productRepository.find({
-            relations: [
-                "category",
-                "category.client",
-                "variants",
-                "media"
-            ],
-            order: {
-                productId: "DESC",
+    const relations = [
+        "category",
+        "category.client",
+        "variants",
+        "media",
+    ];
+
+    const where: any = {
+        is_active: true,
+    };
+
+    // Non super admin: only own client's products
+    if (user.role.name !== Role.SUPER_ADMIN) {
+        where.category = {
+            client: {
+                clientId: user.client.clientId,
             },
-        });
+        };
+    }
+
+    // Filter by category
+    if (categoryId) {
+        where.category = {
+            ...where.category,
+            categoryId,
+        };
     }
 
     return await productRepository.find({
-        where: {
-            category: {
-                client: {
-                    clientId: user.client.clientId,
-                },
-            },
-            is_active: true,
-        },
-        relations: ["client", "variants", "media"],
+        where,
+        relations: [
+            "category",
+            "category.client",
+            "variants",
+            "media",
+        ],
         order: {
-            productId: "DESC",
+            [sortBy]: sortOrder,
         },
     });
 };
-
 export const getProductById = async (
     productId: number,
     userId: number
