@@ -252,6 +252,9 @@ export const getProducts = async (
         .leftJoinAndSelect("product.category", "category")
         .leftJoinAndSelect("category.client", "client")
         .leftJoinAndSelect("product.variants", "variants")
+        .leftJoinAndSelect("variants.color", "color")
+        .leftJoinAndSelect("variants.size", "size")
+        .leftJoinAndSelect("variants.variantImages", "variantImages")
         .leftJoinAndSelect("product.media", "media")
         .where("product.is_active = :active", {
             active: true,
