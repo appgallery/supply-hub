@@ -12,6 +12,7 @@ import {
 import { Variant } from "./Variants";
 import { ProductMedia } from "./ProductMedia";
 import { Category } from "./Category";
+import { Client } from "./Client";
 
 @Entity("products")
 export class Product {
@@ -56,6 +57,13 @@ export class Product {
 
   @OneToMany(() => Variant, (variant) => variant.product)
   variants: Variant[];
+
+  @ManyToOne(() => Client, (client) => client.products, {
+    nullable: false,
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "clientId" })
+  client: Client;
 
   @OneToMany(() => ProductMedia, (media) => media.product)
   media: ProductMedia[];

@@ -105,4 +105,7 @@ export class Client extends BaseEntity {
     { cascade: true }
   )
   owners: ClientOwner[];
+
+  @OneToMany(() => Product, (product) => product.client)
+products: Product[];
 }

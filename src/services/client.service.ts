@@ -205,7 +205,13 @@ export const getClients = async (
 ) => {
 
     const [clients, total] = await clientRepository.findAndCount({
-        relations: ["users", "createdBy"],
+        relations: [
+            "users",
+            "createdBy",
+            "subClients",
+            "products", ,
+            "owners"
+        ],
         where: {
             isActive: true,
         },
@@ -237,7 +243,12 @@ export const getClients = async (
             postalCode: client.postalCode,
             creditLimit: client.creditLimit,
             availableCredit: client.availableCredit,
+
+            totalDealers: client.subClients?.length || 0,
+            totalProducts: client.products?.length || 0,
+
             createdAt: client.createdAt,
+
             createdBy: client.createdBy
                 ? {
                     userId: client.createdBy.userId,
@@ -245,14 +256,16 @@ export const getClients = async (
                     lastName: client.createdBy.lastName,
                 }
                 : null,
+
             clientAdmin:
-                client.users.length > 0
+                client.owners.length > 0
                     ? {
-                        userId: client.users[0].userId,
-                        firstName: client.users[0].firstName,
-                        lastName: client.users[0].lastName,
-                        email: client.users[0].email,
-                        mobile: client.users[0].mobile,
+                        clientOwnerId: client.owners[0].clientOwnerId,
+                        firstName: client.owners[0].firstName,
+                        lastName: client.owners[0].lastName,
+                        email: client.owners[0].email,
+                        mobile: client.owners[0].mobile,
+                        designation: client.owners[0].designation,
                     }
                     : null,
         })),

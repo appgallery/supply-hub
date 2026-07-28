@@ -54,6 +54,8 @@ export const createProduct = async (
             throw new Error("Category not found.");
         }
 
+        const client = category.client;
+
         if (user.role.name === Role.SUPER_ADMIN) {
             if (!category.client) {
                 throw new Error("Invalid category.");
@@ -73,7 +75,6 @@ export const createProduct = async (
             },
             relations: ["category"],
         });
-        console.log("duplicate", duplicate)
         if (duplicate) {
             throw new Error("Product already exists.");
         }
@@ -92,11 +93,11 @@ export const createProduct = async (
             discounted_price,
             currency,
             category,
+            client,
             created_by: user.userId,
         });
 
         const savedProduct = await manager.save(product);
-        const client = category.client;
 
         const fullName = `${user.firstName} ${user.lastName}`;
 
