@@ -67,7 +67,7 @@ export const updateClient = async (
 
         if (!clientId || isNaN(clientId)) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Valid clientId is required.",
             });
         }
@@ -78,7 +78,7 @@ export const updateClient = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: result.message,
             data: {
                 client: result.client,
@@ -90,7 +90,7 @@ export const updateClient = async (
     } catch (error: any) {
 
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message || "Failed to update client.",
         });
 
@@ -107,7 +107,7 @@ export const deleteClient = async (
 
         if (!clientId || isNaN(clientId)) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Valid clientId is required.",
             });
         }
@@ -115,14 +115,14 @@ export const deleteClient = async (
         const result = await clientService.deleteClient(clientId);
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: result.message,
         });
 
     } catch (error: any) {
 
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
 

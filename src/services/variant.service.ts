@@ -407,7 +407,7 @@ export const deleteVariant = async (
     await variantRepository.save(variant);
 
     return {
-        success: true,
+        status: true,
         message: "Variant deleted successfully.",
     };
 };

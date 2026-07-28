@@ -48,12 +48,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
         const data = await authService.forgotPassword(req.body);
 
         return res.status(200).json({
-            success: true,
+            status: true,
             ...data,
         });
     } catch (error: any) {
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -64,12 +64,12 @@ export const resetPassword = async (req: Request, res: Response) => {
         const data = await authService.resetPassword(req.body);
 
         return res.status(200).json({
-            success: true,
+            status: true,
             ...data,
         });
     } catch (error: any) {
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }

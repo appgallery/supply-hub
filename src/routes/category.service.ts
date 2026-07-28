@@ -93,7 +93,7 @@ export const createCategory = async (
     await categoryRepository.save(category);
 
     return {
-        success: true,
+        status: true,
         message: "Category created successfully.",
         data: category,
     };

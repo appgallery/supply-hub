@@ -10,13 +10,13 @@ export const createRole = async (
             req.body,        );
 
         return res.status(201).json({
-            success: true,
+            status: true,
             message: "Role created successfully",
             data,
         });
     } catch (error: any) {
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -30,12 +30,12 @@ export const getRoles = async (
         const data = await RoleService.getRoles();
 
         return res.status(200).json({
-            success: true,
+            status: true,
             data,
         });
     } catch (error: any) {
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -51,12 +51,12 @@ export const getRoleById = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             data,
         });
     } catch (error: any) {
         return res.status(404).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -72,13 +72,13 @@ export const updateRole = async (
             req.body        );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Role updated successfully",
             data,
         });
     } catch (error: any) {
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -94,12 +94,12 @@ export const deleteRole = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             ...data,
         });
     } catch (error: any) {
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }

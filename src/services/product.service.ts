@@ -434,7 +434,7 @@ export const deleteProduct = async (
     await productRepository.save(product);
 
     return {
-        success: true,
+        status: true,
         message: "Product deleted successfully.",
     };
 };

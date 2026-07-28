@@ -44,7 +44,7 @@ export const getSubClients = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Sub clients fetched successfully.",
             total: result.total,
             offset: result.offset,
@@ -54,7 +54,7 @@ export const getSubClients = async (
 
     } catch (error: any) {
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message || "Internal server error",
         });
     }
@@ -70,7 +70,7 @@ export const getSubClientById = async (
 
         if (!subClientId || isNaN(subClientId)) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Valid subClientId is required.",
             });
         }
@@ -78,7 +78,7 @@ export const getSubClientById = async (
         const data = await subClientService.getSubClientById(subClientId);
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Sub client fetched successfully.",
             data,
         });
@@ -86,7 +86,7 @@ export const getSubClientById = async (
     } catch (error: any) {
 
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message || "Failed to fetch sub client.",
         });
 
@@ -103,7 +103,7 @@ export const updateSubClient = async (
 
         if (!subClientId || isNaN(subClientId)) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Valid subClientId is required.",
             });
         }
@@ -114,7 +114,7 @@ export const updateSubClient = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: result.message,
             data: {
                 subClient: result.subClient,
@@ -125,7 +125,7 @@ export const updateSubClient = async (
     } catch (error: any) {
 
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message || "Failed to update sub client.",
         });
 
@@ -142,7 +142,7 @@ export const deleteSubClient = async (
 
         if (!subClientId || isNaN(subClientId)) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Valid subClientId is required.",
             });
         }
@@ -150,14 +150,14 @@ export const deleteSubClient = async (
         const result = await subClientService.deleteSubClient(subClientId);
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: result.message,
         });
 
     } catch (error: any) {
 
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message || "Failed to delete sub client.",
         });
 

@@ -15,7 +15,7 @@ import * as paymentService from "../services/transaction.service";
 //         );
 
 //         return res.status(200).json({
-//             success: true,
+//             status: true,
 //             message: "Checkout created successfully.",
 //             data: response,
 //         });

@@ -14,13 +14,13 @@ export const CreateOrdersController = async (
         );
 
         return res.status(201).json({
-            success: true,
+            status: true,
             message: "Order created successfully.",
             data: result,
         });
     } catch (error: any) {
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -37,7 +37,7 @@ export const getOrdersController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Order Fetched Successfully.",
             offset: result.offset,
             limit: result.limit,
@@ -46,7 +46,7 @@ export const getOrdersController = async (
         });
     } catch (error: any) {
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -64,7 +64,7 @@ export const getOrderByIdController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Order fetched successfully.",
             data: result,
         });
@@ -72,7 +72,7 @@ export const getOrderByIdController = async (
     } catch (error: any) {
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
 
@@ -91,14 +91,14 @@ export const deleteOrderController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Order deleted successfully.",
         });
 
     } catch (error: any) {
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
 
@@ -118,7 +118,7 @@ export const updateOrderController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Order updated successfully.",
             data: result,
         });
@@ -126,7 +126,7 @@ export const updateOrderController = async (
     } catch (error: any) {
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
 
@@ -144,7 +144,7 @@ export const getClientDashboardController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Dashboard fetched successfully.",
             data: result,
         });
@@ -152,7 +152,7 @@ export const getClientDashboardController = async (
     } catch (error: any) {
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
 
@@ -170,7 +170,7 @@ export const getAdminDashboardController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Dashboard fetched successfully.",
             data: result,
         });
@@ -178,7 +178,7 @@ export const getAdminDashboardController = async (
     } catch (error: any) {
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
 

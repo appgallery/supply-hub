@@ -88,7 +88,7 @@ export const deleteSize = async (sizeId: number) => {
   await sizeRepository.remove(size);
 
   return {
-    success: true,
+    status: true,
     message: "Size deleted successfully.",
   };
 };

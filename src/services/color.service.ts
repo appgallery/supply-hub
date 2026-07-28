@@ -90,7 +90,7 @@ export const deleteColor = async (colorId: number) => {
   await colorRepository.remove(color);
 
   return {
-    success: true,
+    status: true,
     message: "Color deleted successfully.",
   };
 };

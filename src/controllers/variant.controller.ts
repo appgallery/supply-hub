@@ -11,13 +11,13 @@ export const createVariantController = async (
         const response = await createVariant(req.body, userId);
 
         return res.status(201).json({
-            success: true,
+            status: true,
             message: "Variant created successfully.",
             data: response,
         });
     } catch (error: any) {
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -32,12 +32,12 @@ export const getVariantsController = async (
         const response = await getVariants(Number(req.query.productId), userId);
 
         return res.status(200).json({
-            success: true,
+            status: true,
             data: response,
         });
     } catch (error: any) {
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -56,12 +56,12 @@ export const getVariantByIdController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             data: response,
         });
     } catch (error: any) {
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -81,13 +81,13 @@ export const updateVariantController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Variant updated successfully.",
             data: response,
         });
     } catch (error: any) {
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
@@ -108,7 +108,7 @@ export const deleteVariantController = async (
         return res.status(200).json(response);
     } catch (error: any) {
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }
