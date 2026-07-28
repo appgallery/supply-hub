@@ -54,7 +54,11 @@ export const getProductController = async (
 
         return res.status(200).json({
             status: true,
-            data: response,
+            message:"Product fetched successfully...",
+            total: response.total,
+            offset: response.offset,
+            limit: response.limit,
+            data: response.products,
         });
 
     } catch (error: any) {
@@ -102,9 +106,12 @@ export const getDealerProductsController = async (
 
         return res.status(200).json({
             status: true,
-            data: response,
+            message:"Dealer products fetched successfully...",
+            total: response.total,
+            offset: response.offset,
+            limit: response.limit,
+            data: response.products,
         });
-
     } catch (error: any) {
         return res.status(500).json({
             status: false,
