@@ -99,7 +99,7 @@ export const forgotPassword = async (body: any) => {
     return {
         "status": true,
         "message": "OTP has been sent to your email.",
-        data: `OPT is ${otp}`
+        data: `OTP is ${otp}`
     };
 };
 
