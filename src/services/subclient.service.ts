@@ -230,7 +230,7 @@ export const getSubClientById = async (
     const subClient = await subClientRepository.findOne({
         where: {
             subClientId,
-            isActive: false,
+            isActive: true,
         },
         relations: [
             "client",
