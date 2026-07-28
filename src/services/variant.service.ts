@@ -5,7 +5,7 @@ import { Size } from "../entities/Size";
 import { User } from "../entities/User";
 import { VariantImage } from "../entities/VariantImage";
 import { Variant } from "../entities/Variants";
-import { VariantTechnicalDetail } from "../entities/variantTechnicalDetails";
+import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
 import { Role } from "../utils/constants";
 
 export const productRepository = AppDataSource.getRepository(Product);

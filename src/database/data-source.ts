@@ -21,7 +21,7 @@ import { Transaction } from "../entities/Transaction";
 import { Cart } from "../entities/Cart";
 import { CartItem } from "../entities/CartItem";
 import { Category } from "../entities/Category";
-import { VariantTechnicalDetail } from "../entities/variantTechnicalDetails";
+import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
 import { ProductTechnicalDetail } from "../entities/ProductTechnicalDetails";
 
 dotenv.config();

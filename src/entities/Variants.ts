@@ -13,7 +13,7 @@ import { Product } from "./Product";
 import { VariantImage } from "./VariantImage";
 import { Color } from "./Color";
 import { Size } from "./Size";
-import { VariantTechnicalDetail } from "./variantTechnicalDetails";
+import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
 
 @Entity("variants")
 export class Variant {

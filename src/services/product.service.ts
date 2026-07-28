@@ -13,7 +13,7 @@ import { Variant } from "../entities/Variants";
 import { createActivity } from "../utils/helper";
 import { Category } from "../entities/Category";
 import { ProductTechnicalDetail } from "../entities/ProductTechnicalDetails";
-import { VariantTechnicalDetail } from "../entities/variantTechnicalDetails";
+import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
 
 const productRepository = AppDataSource.getRepository(Product);
 const userRepository = AppDataSource.getRepository(User);
