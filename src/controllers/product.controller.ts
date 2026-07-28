@@ -31,10 +31,17 @@ export const getProductController = async (
             ? Number(req.query.categoryId)
             : undefined;
 
+        const search = req.query.search
+            ? String(req.query.search)
+            : undefined;
+
         const sortBy = (req.query.sortBy as
             | "productId"
             | "name"
-            | "createdAt") || "productId";
+            | "createdAt"
+            | "price_low"
+            | "price_high"
+            | "most_sold") || "productId";
 
         const sortOrder = (req.query.sortOrder as
             | "ASC"
@@ -46,6 +53,7 @@ export const getProductController = async (
         const response = await getProducts(
             userId,
             categoryId,
+            search,
             sortBy,
             sortOrder,
             offset,
@@ -54,7 +62,7 @@ export const getProductController = async (
 
         return res.status(200).json({
             status: true,
-            message:"Product fetched successfully...",
+            message: "Product fetched successfully...",
             total: response.total,
             offset: response.offset,
             limit: response.limit,

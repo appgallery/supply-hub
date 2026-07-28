@@ -226,7 +226,14 @@ export const generateProductCode = async () => {
 export const getProducts = async (
     userId: number,
     categoryId?: number,
-    sortBy: "productId" | "name" | "createdAt" = "productId",
+    search?: string,
+    sortBy:
+        | "productId"
+        | "name"
+        | "createdAt"
+        | "price_low"
+        | "price_high"
+        | "most_sold" = "productId",
     sortOrder: "ASC" | "DESC" = "DESC",
     offset: number = 0,
     limit: number = 10
@@ -240,41 +247,86 @@ export const getProducts = async (
         throw new Error("User not found.");
     }
 
-    const where: any = {
-        is_active: true,
-    };
+    const query = productRepository
+        .createQueryBuilder("product")
+        .leftJoinAndSelect("product.category", "category")
+        .leftJoinAndSelect("category.client", "client")
+        .leftJoinAndSelect("product.variants", "variants")
+        .leftJoinAndSelect("product.media", "media")
+        .where("product.is_active = :active", {
+            active: true,
+        });
 
-    // Non super admin: only own client's products
+    // Client wise products
     if (user.role.name !== Role.SUPER_ADMIN) {
-        where.category = {
-            client: {
+        query.andWhere(
+            "client.clientId = :clientId",
+            {
                 clientId: user.client.clientId,
-            },
-        };
+            }
+        );
     }
 
-    // Filter by category
+    // Category filter
     if (categoryId) {
-        where.category = {
-            ...where.category,
-            categoryId,
-        };
+        query.andWhere(
+            "category.categoryId = :categoryId",
+            {
+                categoryId,
+            }
+        );
     }
 
-    const [products, total] = await productRepository.findAndCount({
-        where,
-        relations: [
-            "category",
-            "category.client",
-            "variants",
-            "media",
-        ],
-        order: {
-            [sortBy]: sortOrder,
-        },
-        skip: offset,
-        take: limit,
-    });
+    // Search
+    if (search) {
+        query.andWhere(
+            "category.categoryName ILIKE :search",
+            {
+                search: `%${search}%`,
+            }
+        );
+    }
+    // Sorting
+    switch (sortBy) {
+        case "name":
+            query.orderBy(
+                "product.productName",
+                sortOrder
+            );
+            break;
+
+        case "createdAt":
+            query.orderBy(
+                "product.created_at",
+                sortOrder
+            );
+            break;
+
+        case "price_low":
+            query.orderBy(
+                "product.base_price",
+                "ASC"
+            );
+            break;
+
+        case "price_high":
+            query.orderBy(
+                "product.base_price",
+                "DESC"
+            );
+            break;
+
+        default:
+            query.orderBy(
+                "product.productId",
+                sortOrder
+            );
+    }
+
+    const [products, total] = await query
+        .skip(offset)
+        .take(limit)
+        .getManyAndCount();
 
     return {
         products,
