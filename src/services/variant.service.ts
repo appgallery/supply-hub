@@ -6,6 +6,7 @@ import { User } from "../entities/User";
 import { VariantImage } from "../entities/VariantImage";
 import { Variant } from "../entities/Variants";
 import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
+import { WholesalePriceTier } from "../entities/WholesalePriceTiers";
 import { Role } from "../utils/constants";
 
 export const productRepository = AppDataSource.getRepository(Product);
@@ -32,6 +33,7 @@ export const createVariant = async (
             stock,
             images = [],
             technicalDetails = [],
+            wholesalePriceTiers = [],
         } = body;
 
         const user = await manager.findOne(User, {
@@ -127,6 +129,27 @@ export const createVariant = async (
             }
         }
 
+        // ================= Variant Wholesale Price Tiers =================
+
+        if (wholesalePriceTiers.length) {
+
+            for (const tier of wholesalePriceTiers) {
+
+                const wholesaleTier = manager.create(
+                    WholesalePriceTier,
+                    {
+                        product,
+                        variant: savedVariant,
+                        min_quantity: tier.min_quantity,
+                        price: tier.price,
+                        created_by: userId,
+                    }
+                );
+
+                await manager.save(wholesaleTier);
+            }
+        }
+
         // Create Variant Images
         if (images.length) {
             for (const item of images) {
@@ -152,6 +175,7 @@ export const createVariant = async (
                 "size",
                 "variantImages",
                 "technicalDetails",
+                "wholesalePriceTiers",
             ],
         });
     });
@@ -286,6 +310,7 @@ export const updateVariant = async (
                 "size",
                 "variantImages",
                 "technicalDetails",
+                "wholesalePriceTiers",
             ],
         });
 
@@ -406,6 +431,34 @@ export const updateVariant = async (
             }
         }
 
+        // ================= Variant Wholesale Price Tiers =================
+
+        if (body.wholesalePriceTiers) {
+
+            // Remove old tiers
+            await manager.delete(WholesalePriceTier, {
+                variant: {
+                    variantId: variant.variantId,
+                },
+            });
+
+
+            // Add new tiers
+            for (const tier of body.wholesalePriceTiers) {
+
+                const wholesaleTier =
+                    manager.create(WholesalePriceTier, {
+                        product: variant.product,
+                        variant,
+                        min_quantity: tier.min_quantity,
+                        price: tier.price,
+                        created_by: userId,
+                    });
+
+                await manager.save(wholesaleTier);
+            }
+        }
+
         // ================= Variant Images =================
 
         if (body.images) {
@@ -443,6 +496,7 @@ export const updateVariant = async (
                 "size",
                 "variantImages",
                 "technicalDetails",
+                "wholesalePriceTiers",
             ],
         });
     });

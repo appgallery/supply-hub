@@ -14,6 +14,7 @@ import { createActivity } from "../utils/helper";
 import { Category } from "../entities/Category";
 import { ProductTechnicalDetail } from "../entities/ProductTechnicalDetails";
 import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
+import { WholesalePriceTier } from "../entities/WholesalePriceTiers";
 
 const productRepository = AppDataSource.getRepository(Product);
 const userRepository = AppDataSource.getRepository(User);
@@ -35,6 +36,7 @@ export const createProduct = async (
             categoryId,
             media = [],
             technicalDetails = [],
+            wholesalePriceTiers = [],
             variants = [],
         } = body;
 
@@ -137,6 +139,18 @@ export const createProduct = async (
             }
         }
 
+        if (technicalDetails?.length) {
+            for (const detail of technicalDetails) {
+                const productTechnicalDetail = manager.create(ProductTechnicalDetail, {
+                    product: savedProduct,
+                    key: detail.key,
+                    value: detail.value,
+                });
+
+                await manager.save(productTechnicalDetail);
+            }
+        }
+
         // ================= Variants =================
 
         for (const item of variants) {
@@ -202,6 +216,27 @@ export const createProduct = async (
                 }
             }
 
+            // ================= Variant Wholesale Price Tiers =================
+
+            if (item.wholesalePriceTiers?.length) {
+
+                for (const tier of item.wholesalePriceTiers) {
+
+                    const wholesaleTier = manager.create(
+                        WholesalePriceTier,
+                        {
+                            product: savedProduct,
+                            variant: savedVariant,
+                            min_quantity: tier.min_quantity,
+                            price: tier.price,
+                            created_by: user.userId,
+                        }
+                    );
+
+                    await manager.save(wholesaleTier);
+                }
+            }
+
             // ============== Variant Images ==============
 
             if (item.images?.length) {
@@ -226,11 +261,13 @@ export const createProduct = async (
                 "category.client",
                 "media",
                 "technicalDetails",
+                "wholesalePriceTiers",
                 "variants",
                 "variants.variantImages",
                 "variants.color",
                 "variants.size",
                 "variants.technicalDetails",
+                "variants.wholesalePriceTiers",
             ],
         });
     });
@@ -496,11 +533,13 @@ export const updateProduct = async (
                     "client",
                     "media",
                     "technicalDetails",
+                    "wholesalePriceTiers",
                     "variants",
                     "variants.variantImages",
                     "variants.technicalDetails",
                     "variants.color",
                     "variants.size",
+                    "variants.wholesalePriceTiers",
                 ],
             });
         } else {
@@ -614,6 +653,33 @@ export const updateProduct = async (
                     });
 
                 await manager.save(technicalDetail);
+            }
+        }
+
+        // ================= Product Wholesale Price Tiers =================
+
+        if (body.wholesalePriceTiers) {
+
+            await manager.delete(WholesalePriceTier, {
+                product: {
+                    productId: product.productId,
+                },
+                variant: null,
+            });
+
+            for (const tier of body.wholesalePriceTiers) {
+
+                const wholesaleTier = manager.create(
+                    WholesalePriceTier,
+                    {
+                        product,
+                        min_quantity: tier.min_quantity,
+                        price: tier.price,
+                        created_by: user.userId,
+                    }
+                );
+
+                await manager.save(wholesaleTier);
             }
         }
 
@@ -735,6 +801,34 @@ export const updateProduct = async (
                         );
                     }
                 }
+
+                // ================= Variant Wholesale Price Tiers =================
+
+                if (item.wholesalePriceTiers?.length) {
+
+                    await manager.delete(WholesalePriceTier, {
+                        variant: {
+                            variantId: savedVariant.variantId,
+                        },
+                    });
+
+
+                    for (const tier of item.wholesalePriceTiers) {
+
+                        const wholesaleTier = manager.create(
+                            WholesalePriceTier,
+                            {
+                                product,
+                                variant: savedVariant,
+                                min_quantity: tier.min_quantity,
+                                price: tier.price,
+                                created_by: user.userId,
+                            }
+                        );
+
+                        await manager.save(wholesaleTier);
+                    }
+                }
             }
         }
 
@@ -747,11 +841,14 @@ export const updateProduct = async (
                 "category.client",
                 "media",
                 "technicalDetails",
+                "wholesalePriceTiers",
+
                 "variants",
                 "variants.color",
                 "variants.size",
                 "variants.variantImages",
                 "variants.technicalDetails",
+                "variants.wholesalePriceTiers",
             ],
         });
     });

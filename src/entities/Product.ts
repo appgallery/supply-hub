@@ -14,6 +14,7 @@ import { ProductMedia } from "./ProductMedia";
 import { Category } from "./Category";
 import { Client } from "./Client";
 import { ProductTechnicalDetail } from "./ProductTechnicalDetails";
+import { WholesalePriceTier } from "./WholesalePriceTiers";
 
 @Entity("products")
 export class Product {
@@ -82,6 +83,15 @@ export class Product {
     { cascade: true }
   )
   technicalDetails: ProductTechnicalDetail[];
+
+  @OneToMany(
+    () => WholesalePriceTier,
+    tier => tier.product,
+    {
+      cascade: true,
+    }
+  )
+  wholesalePriceTiers: WholesalePriceTier[];
 
   @Column()
   created_by: number;

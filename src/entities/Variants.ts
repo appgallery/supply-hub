@@ -14,6 +14,7 @@ import { VariantImage } from "./VariantImage";
 import { Color } from "./Color";
 import { Size } from "./Size";
 import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
+import { WholesalePriceTier } from "./WholesalePriceTiers";
 
 @Entity("variants")
 export class Variant {
@@ -82,6 +83,15 @@ export class Variant {
     { cascade: true }
   )
   technicalDetails: VariantTechnicalDetail[];
+
+  @OneToMany(
+    () => WholesalePriceTier,
+    tier => tier.variant,
+    {
+      cascade: true,
+    }
+  )
+  wholesalePriceTiers: WholesalePriceTier[];
 
   @Column()
   created_by: number;
