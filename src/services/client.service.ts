@@ -290,6 +290,8 @@ export const updateClient = async (
     const {
         companyName,
         contactPerson,
+        businessType,
+        registrationNumber,
         email,
         mobile,
         gstNumber,
@@ -357,6 +359,8 @@ export const updateClient = async (
 
     // Update Client
     client.companyName = companyName;
+    client.businessType = businessType;
+    client.registrationNumber = registrationNumber;
     client.contactPerson = contactPerson;
     client.email = email;
     client.mobile = mobile;
