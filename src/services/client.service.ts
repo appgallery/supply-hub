@@ -209,7 +209,7 @@ export const getClients = async (
             "users",
             "createdBy",
             "subClients",
-            "products", ,
+            "products",
             "owners"
         ],
         where: {
