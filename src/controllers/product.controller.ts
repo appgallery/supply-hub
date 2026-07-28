@@ -40,17 +40,23 @@ export const getProductController = async (
             | "ASC"
             | "DESC") || "DESC";
 
+        const offset = Number(req.query.offset) || 0;
+        const limit = Number(req.query.limit) || 10;
+
         const response = await getProducts(
             userId,
             categoryId,
             sortBy,
-            sortOrder
+            sortOrder,
+            offset,
+            limit
         );
 
         return res.status(200).json({
             status: true,
             data: response,
         });
+
     } catch (error: any) {
         return res.status(500).json({
             status: false,
@@ -84,8 +90,15 @@ export const getDealerProductsController = async (
 ) => {
     try {
         const userId = (req as any).user.userId;
-console.log("userId",userId)
-        const response = await getDealerProducts(userId);
+
+        const offset = Number(req.query.offset) || 0;
+        const limit = Number(req.query.limit) || 10;
+
+        const response = await getDealerProducts(
+            userId,
+            offset,
+            limit
+        );
 
         return res.status(200).json({
             status: true,
@@ -99,6 +112,8 @@ console.log("userId",userId)
         });
     }
 };
+
+
 export const updateProductController = async (
     req: Request, res: Response
 ) => {

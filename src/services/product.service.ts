@@ -227,7 +227,9 @@ export const getProducts = async (
     userId: number,
     categoryId?: number,
     sortBy: "productId" | "name" | "createdAt" = "productId",
-    sortOrder: "ASC" | "DESC" = "DESC"
+    sortOrder: "ASC" | "DESC" = "DESC",
+    offset: number = 0,
+    limit: number = 10
 ) => {
     const user = await userRepository.findOne({
         where: { userId },
@@ -237,13 +239,6 @@ export const getProducts = async (
     if (!user) {
         throw new Error("User not found.");
     }
-
-    const relations = [
-        "category",
-        "category.client",
-        "variants",
-        "media",
-    ];
 
     const where: any = {
         is_active: true,
@@ -266,7 +261,7 @@ export const getProducts = async (
         };
     }
 
-    return await productRepository.find({
+    const [products, total] = await productRepository.findAndCount({
         where,
         relations: [
             "category",
@@ -277,7 +272,16 @@ export const getProducts = async (
         order: {
             [sortBy]: sortOrder,
         },
+        skip: offset,
+        take: limit,
     });
+
+    return {
+        products,
+        total,
+        offset,
+        limit,
+    };
 };
 
 export const getProductById = async (
@@ -327,7 +331,11 @@ export const getProductById = async (
     return product;
 };
 
-export const getDealerProducts = async (userId: number) => {
+export const getDealerProducts = async (
+    userId: number,
+    offset: number = 0,
+    limit: number = 10
+) => {
     const user = await userRepository.findOne({
         where: { userId },
         relations: ["client", "role"],
@@ -341,7 +349,7 @@ export const getDealerProducts = async (userId: number) => {
         throw new Error("Client not assigned to this dealer.");
     }
 
-    return await productRepository.find({
+    const [products, total] = await productRepository.findAndCount({
         where: {
             client: {
                 clientId: user.client.clientId,
@@ -357,7 +365,16 @@ export const getDealerProducts = async (userId: number) => {
         order: {
             productId: "DESC",
         },
+        skip: offset,
+        take: limit,
     });
+
+    return {
+        products,
+        total,
+        offset,
+        limit,
+    };
 };
 
 export const updateProduct = async (
