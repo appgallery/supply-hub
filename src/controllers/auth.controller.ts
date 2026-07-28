@@ -11,7 +11,7 @@ export const login = async (
 
         return res.status(200).json({
             status:true,
-            message:"Login successfully..."
+            message:"Login successfully...",
             ...result
             
         });
