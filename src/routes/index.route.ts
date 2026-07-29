@@ -9,6 +9,7 @@ import sizeRoutes from './size.route'
 import VariantRoute from './variant.route'
 import OrderRoute from './order.route'
 import categoryRoute from './category.route'
+import uploadRoute from './upload.route'
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/size", sizeRoutes);
 router.use("/variant", VariantRoute);
 router.use("/order", OrderRoute);
 router.use("/category", categoryRoute);
+router.use("/upload", uploadRoute);
 
 export default router;

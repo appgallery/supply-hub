@@ -12,6 +12,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1097.0",
+    "@aws-sdk/s3-request-presigner": "^3.1097.0",
     "@getbrevo/brevo": "^6.0.2",
     "axios": "^1.18.1",
     "bcryptjs": "^3.0.3",
@@ -21,12 +23,14 @@
     "express": "^5.2.1",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "mime-types": "^3.0.2",
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "pg": "^8.22.0",
     "razorpay": "^2.9.8",
     "reflect-metadata": "^0.2.2",
-    "typeorm": "^0.3.27"
+    "typeorm": "^0.3.27",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -35,6 +39,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
+    "@types/multer": "^2.2.0",
     "@types/node": "^26.1.1",
     "@types/nodemon": "^1.19.6",
     "nodemon": "^3.1.14",
