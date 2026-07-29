@@ -31,6 +31,7 @@ export const createProduct = async (
             productName,
             description,
             base_price,
+            unit_text,
             discount_percentage = 0,
             currency = "AUD",
             categoryId,
@@ -94,6 +95,7 @@ export const createProduct = async (
             productCode,
             productName,
             description,
+            unit_text,
             base_price,
             discount_percentage,
             discounted_price,
@@ -139,15 +141,22 @@ export const createProduct = async (
             }
         }
 
-        if (technicalDetails?.length) {
-            for (const detail of technicalDetails) {
-                const productTechnicalDetail = manager.create(ProductTechnicalDetail, {
-                    product: savedProduct,
-                    key: detail.key,
-                    value: detail.value,
-                });
+        if (wholesalePriceTiers?.length) {
 
-                await manager.save(productTechnicalDetail);
+            for (const tier of wholesalePriceTiers) {
+
+                const wholesaleTier = manager.create(
+                    WholesalePriceTier,
+                    {
+                        product: savedProduct,
+                        variant: null,
+                        min_quantity: tier.min_quantity,
+                        price: tier.price,
+                        created_by: user.userId,
+                    }
+                );
+
+                await manager.save(wholesaleTier);
             }
         }
 
@@ -194,6 +203,7 @@ export const createProduct = async (
                 name: item.name,
                 sku: item.sku,
                 price: item.price,
+                unit_text: item.unit_text,
                 discount_percentage: item.discount_percentage || 0,
                 discounted_price: variantDiscountedPrice,
                 stock: item.stock,
@@ -448,6 +458,7 @@ export const getProductById = async (
     productId: number,
     userId: number
 ) => {
+
     const user = await userRepository.findOne({
         where: { userId },
         relations: ["client", "role"],
@@ -457,32 +468,100 @@ export const getProductById = async (
         throw new Error("User not found.");
     }
 
-    let product;
 
-    if (user.role.name === Role.SUPER_ADMIN) {
-        product = await productRepository.findOne({
-            where: { productId, is_active: true },
-            relations: ["client", "variants", "media"],
-        });
-    } else {
-        product = await productRepository.findOne({
-            where: {
-                productId,
-                category: {
-                    client: {
-                        clientId: user.client.clientId,
-                    },
-                },
-                is_active: true,
-            },
-            relations: [
-                "category",
-                "category.client",
-                "variants",
-                "media"
-            ]
-        });
+    const query = productRepository
+        .createQueryBuilder("product")
+
+        // Category + Client
+        .leftJoinAndSelect(
+            "product.category",
+            "category"
+        )
+        .leftJoinAndSelect(
+            "category.client",
+            "client"
+        )
+
+
+        // Product Details
+        .leftJoinAndSelect(
+            "product.technicalDetails",
+            "productTechnicalDetails"
+        )
+        .leftJoinAndSelect(
+            "product.wholesalePriceTiers",
+            "productWholesalePriceTiers"
+        )
+
+
+        // Variants
+        .leftJoinAndSelect(
+            "product.variants",
+            "variants"
+        )
+
+        .leftJoinAndSelect(
+            "variants.color",
+            "color"
+        )
+
+        .leftJoinAndSelect(
+            "variants.size",
+            "size"
+        )
+
+        .leftJoinAndSelect(
+            "variants.variantImages",
+            "variantImages"
+        )
+
+        .leftJoinAndSelect(
+            "variants.technicalDetails",
+            "variantTechnicalDetails"
+        )
+
+        .leftJoinAndSelect(
+            "variants.wholesalePriceTiers",
+            "variantWholesalePriceTiers"
+        )
+
+
+        // Product Images
+        .leftJoinAndSelect(
+            "product.media",
+            "media"
+        )
+
+        .where(
+            "product.productId = :productId",
+            {
+                productId
+            }
+        )
+
+        .andWhere(
+            "product.is_active = :active",
+            {
+                active: true
+            }
+        );
+
+
+    // Client restriction
+    if (user.role.name !== Role.SUPER_ADMIN) {
+
+        query.andWhere(
+            "client.clientId = :clientId",
+            {
+                clientId: user.client.clientId,
+            }
+        );
+
     }
+
+
+    const product = await query.getOne();
+
 
     if (!product) {
         throw new Error("Product not found.");

@@ -57,6 +57,11 @@ export class Product {
   @Column({ default: true })
   is_active: boolean;
 
+  @Column({
+    nullable: true,
+  })
+  unit_text: string;
+
   @OneToMany(() => Variant, (variant) => variant.product)
   variants: Variant[];
 

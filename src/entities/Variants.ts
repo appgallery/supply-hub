@@ -68,6 +68,11 @@ export class Variant {
   @Column({ default: 0 })
   stock: number;
 
+  @Column({
+    nullable: true,
+  })
+  unit_text: string;
+
   @OneToMany(
     () => VariantImage,
     (variantImage) => variantImage.variant,
