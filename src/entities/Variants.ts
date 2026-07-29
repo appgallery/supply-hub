@@ -73,6 +73,13 @@ export class Variant {
   })
   unit_text: string;
 
+  @Column({
+    type: "varchar",
+    length: 255,
+    nullable: true,
+  })
+  estimated_delivery_time: string;
+
   @OneToMany(
     () => VariantImage,
     (variantImage) => variantImage.variant,

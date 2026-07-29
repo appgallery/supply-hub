@@ -62,6 +62,13 @@ export class Product {
   })
   unit_text: string;
 
+  @Column({
+    type: "varchar",
+    length: 255,
+    nullable: true,
+  })
+  estimated_delivery_time: string;
+
   @OneToMany(() => Variant, (variant) => variant.product)
   variants: Variant[];
 

@@ -31,6 +31,8 @@ export const createVariant = async (
             price,
             discount_percentage = 0,
             stock,
+            unit_text,
+            estimated_delivery_time,
             images = [],
             technicalDetails = [],
             wholesalePriceTiers = [],
@@ -105,6 +107,8 @@ export const createVariant = async (
             size,
             name,
             sku,
+            unit_text,
+            estimated_delivery_time,
             price,
             discount_percentage,
             discounted_price,
@@ -396,6 +400,8 @@ export const updateVariant = async (
         variant.name = body.name ?? variant.name;
         variant.price = body.price ?? variant.price;
         variant.stock = body.stock ?? variant.stock;
+        variant.unit_text = body.unit_text ?? variant.unit_text;
+        variant.estimated_delivery_time = body.estimated_delivery_time ?? variant.estimated_delivery_time;
         variant.discount_percentage =
             body.discount_percentage ??
             variant.discount_percentage;
