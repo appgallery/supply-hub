@@ -63,11 +63,16 @@ export class Product {
   unit_text: string;
 
   @Column({
-    type: "varchar",
-    length: 255,
+    type: "int",
     nullable: true,
   })
-  estimated_delivery_time: string;
+  min_delivery_days: number;
+
+  @Column({
+    type: "int",
+    nullable: true,
+  })
+  max_delivery_days: number;
 
   @OneToMany(() => Variant, (variant) => variant.product)
   variants: Variant[];

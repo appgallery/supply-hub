@@ -32,7 +32,8 @@ export const createProduct = async (
             description,
             base_price,
             unit_text,
-            estimated_delivery_time,
+            min_delivery_days,
+            max_delivery_days,
             discount_percentage = 0,
             currency = "AUD",
             categoryId,
@@ -97,7 +98,8 @@ export const createProduct = async (
             productName,
             description,
             unit_text,
-            estimated_delivery_time,
+            min_delivery_days,
+            max_delivery_days,
             base_price,
             discount_percentage,
             discounted_price,
@@ -206,7 +208,8 @@ export const createProduct = async (
                 sku: item.sku,
                 price: item.price,
                 unit_text: item.unit_text,
-                estimated_delivery_time: item.estimated_delivery_time,
+                min_delivery_days: item.min_delivery_days,
+                max_delivery_days: item.max_delivery_days,
                 discount_percentage: item.discount_percentage || 0,
                 discounted_price: variantDiscountedPrice,
                 stock: item.stock,
@@ -726,8 +729,11 @@ export const updateProduct = async (
         product.unit_text =
             body.unit_text ?? product.unit_text;
 
-        product.estimated_delivery_time =
-            body.estimated_delivery_time ?? product.estimated_delivery_time;
+        product.min_delivery_days =
+            body.min_delivery_days ?? product.min_delivery_days;
+
+        product.max_delivery_days =
+            body.max_delivery_days ?? product.max_delivery_days;
 
         product.discounted_price =
             Number(product.base_price) -
@@ -869,7 +875,8 @@ export const updateProduct = async (
                     sku: item.sku,
                     price: item.price,
                     unit_text: item.unit_text,
-                    estimated_delivery_time: item.estimated_delivery_time,
+                    min_delivery_days: item.min_delivery_days,
+                    max_delivery_days: item.max_delivery_days,
                     discount_percentage:
                         item.discount_percentage || 0,
                     discounted_price:

@@ -10,6 +10,7 @@ import {
 import { BaseEntity } from "./BaseEntity";
 import { Client } from "./Client";
 import { User } from "./User";
+import { TaxType } from "../utils/constants";
 
 @Entity("sub_clients")
 export class SubClient extends BaseEntity {
@@ -23,7 +24,7 @@ export class SubClient extends BaseEntity {
   client: Client;
 
   @Column({
-    nullable:true
+    nullable: true
   })
   companyName: string;
 
@@ -46,6 +47,21 @@ export class SubClient extends BaseEntity {
     nullable: true,
   })
   gstNumber: string;
+
+  @Column({
+    type: "enum",
+    enum: TaxType,
+    default: TaxType.GST,
+  })
+  taxType: TaxType;
+
+  @Column({
+    type: "decimal",
+    precision: 5,
+    scale: 2,
+    default: 18.00,
+  })
+  taxRate: number;
 
   @Column({
     nullable: true,

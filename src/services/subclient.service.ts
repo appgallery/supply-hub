@@ -6,7 +6,7 @@ import { Role } from "../entities/Role";
 import { SubClient } from "../entities/SubClient";
 import { User } from "../entities/User";
 import { createActivity } from "../utils/helper";
-import { ActivityType } from "../utils/constants";
+import { ActivityType, TaxType } from "../utils/constants";
 
 const clientRepository = AppDataSource.getRepository(Client);
 const subClientRepository = AppDataSource.getRepository(SubClient);
@@ -23,6 +23,8 @@ export const createSubClient = async (
         email,
         mobile,
         gstNumber,
+        taxType,
+        taxRate,
         panNumber,
         website,
         address,
@@ -101,6 +103,8 @@ export const createSubClient = async (
         email,
         mobile,
         gstNumber,
+        taxType,
+        taxRate,
         panNumber,
         website,
         address,
@@ -192,6 +196,8 @@ export const getSubClients = async (
             email: subClient.email,
             mobile: subClient.mobile,
             gstNumber: subClient.gstNumber,
+            taxType: subClient.taxType,
+            taxRate: subClient.taxRate,
             panNumber: subClient.panNumber,
             website: subClient.website,
             address: subClient.address,
@@ -276,6 +282,8 @@ export const updateSubClient = async (
         email,
         mobile,
         gstNumber,
+        taxType,
+        taxRate,
         panNumber,
         website,
         address,
@@ -323,6 +331,8 @@ export const updateSubClient = async (
     subClient.email = email;
     subClient.mobile = mobile;
     subClient.gstNumber = gstNumber;
+    subClient.taxType = taxType;
+    subClient.taxRate = taxRate;
     subClient.panNumber = panNumber;
     subClient.website = website;
     subClient.address = address;

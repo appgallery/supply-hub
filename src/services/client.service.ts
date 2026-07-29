@@ -25,6 +25,8 @@ export const createClient = async (
         email,
         mobile,
         gstNumber,
+        taxType,
+        taxRate,
         panNumber,
         website,
         address,
@@ -119,6 +121,8 @@ export const createClient = async (
         email,
         mobile,
         gstNumber,
+        taxType,
+        taxRate,
         panNumber,
         website,
         address,
@@ -240,6 +244,8 @@ export const getClients = async (
             email: client.email,
             mobile: client.mobile,
             gstNumber: client.gstNumber,
+            taxType: client.taxType,
+            taxRate: client.taxRate,
             panNumber: client.panNumber,
             website: client.website,
             address: client.address,
@@ -295,6 +301,8 @@ export const updateClient = async (
         email,
         mobile,
         gstNumber,
+        taxType,
+        taxRate,
         panNumber,
         website,
         address,
@@ -365,6 +373,8 @@ export const updateClient = async (
     client.email = email;
     client.mobile = mobile;
     client.gstNumber = gstNumber;
+    client.taxType = taxType;
+    client.taxRate = taxRate;
     client.panNumber = panNumber;
     client.website = website;
     client.address = address;

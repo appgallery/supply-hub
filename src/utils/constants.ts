@@ -59,3 +59,9 @@ export enum ActivityType {
     SUB_CLIENT_UPDATED="SUB_CLIENT_UPDATED",
     SUB_CLIENT_DELETED="SUB_CLIENT_DELETED"
 }
+
+export enum TaxType {
+  GST = "GST",
+  VAT = "VAT",
+  SALES_TAX = "SALES_TAX",
+}
