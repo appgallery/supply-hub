@@ -13,6 +13,7 @@ import { createActivity } from "../utils/helper";
 import { Cart } from "../entities/Cart";
 import { Address } from "../entities/Address";
 import { CartItem } from "../entities/CartItem";
+import { sendPushNotification } from "./notification.service";
 
 export const orderRepository = AppDataSource.getRepository(Order);
 export const orderItemRepository = AppDataSource.getRepository(OrderItem);
@@ -978,18 +979,16 @@ export const getAdminDashboard = async (
         activityFeed,
     };
 };
+
 export const updateOrderStatus = async (
     orderId: number,
     body: any,
     userId: number
 ) => {
-
     const {
         status,
         rejectionReason
     } = body;
-
-
     const user = await userRepository.findOne({
         where: {
             userId,
@@ -999,22 +998,17 @@ export const updateOrderStatus = async (
             "client",
         ],
     });
-
-
     if (!user) {
         throw new Error("User not found.");
     }
-
     if (user.role.name !== "client") {
         throw new Error(
             "Only client can approve or reject order."
         );
     }
-
     if (!user.client) {
         throw new Error("Client profile not found.");
     }
-
     const order = await orderRepository.findOne({
         where: {
             orderId,
@@ -1027,18 +1021,14 @@ export const updateOrderStatus = async (
             "subClient",
         ],
     });
-
-
     if (!order) {
         throw new Error("Order not found.");
     }
-
     if (order.status !== OrderStatus.PENDING) {
         throw new Error(
             "Only pending orders can be updated."
         );
     }
-
     if (
         status !== OrderStatus.APPROVED &&
         status !== OrderStatus.REJECTED
@@ -1047,7 +1037,6 @@ export const updateOrderStatus = async (
             "Invalid order status."
         );
     }
-
     if (status === OrderStatus.APPROVED) {
         order.status = OrderStatus.APPROVED;
         order.approvedBy = user;
@@ -1060,7 +1049,6 @@ export const updateOrderStatus = async (
             user.userId
         );
     }
-
     if (status === OrderStatus.REJECTED) {
         if (!rejectionReason) {
             throw new Error(
@@ -1081,5 +1069,37 @@ export const updateOrderStatus = async (
     }
     order.updated_by = user.userId;
     await orderRepository.save(order);
+
+    const dealerUser = await userRepository.findOne({
+        where: {
+            subClient: {
+                subClientId: order.subClient.subClientId,
+            },
+        },
+    });
+
+    if (dealerUser?.fcm_token) {
+
+        const title =
+            status === OrderStatus.APPROVED
+                ? "Order Approved"
+                : "Order Rejected";
+
+        const message =
+            status === OrderStatus.APPROVED
+                ? `Your order ${order.orderNumber} has been approved.`
+                : `Your order ${order.orderNumber} has been rejected.`;
+
+        await sendPushNotification(
+            dealerUser.fcm_token,
+            title,
+            message,
+            {
+                orderId: order.orderId.toString(),
+                status: order.status,
+                type: "ORDER_STATUS",
+            }
+        );
+    }
     return order;
 };

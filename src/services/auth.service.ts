@@ -3,7 +3,6 @@ import { RefreshToken } from "../entities/RefreshToken";
 import { User } from "../entities/User";
 import { generateAccessToken } from "../utils/jwt";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import { sendForgotPasswordOTP } from "./email.service";
 
 const userRepository = AppDataSource.getRepository(User);
@@ -62,7 +61,6 @@ export const logout = async () => {
         message: "Logout successful.",
     };
 };
-
 
 export const forgotPassword = async (body: any) => {
     const { email } = body;
@@ -169,4 +167,24 @@ export const resetPassword = async (body: any) => {
     return {
         message: "Password reset successfully."
     };
+};
+
+export const saveFcmToken = async (
+    userId: number,
+    fcmToken: string
+) => {
+
+    const user = await userRepository.findOne({
+        where: { userId }
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    user.fcm_token = fcmToken;
+
+    await userRepository.save(user);
+
+    return user;
 };

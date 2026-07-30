@@ -86,4 +86,9 @@ export class User extends BaseEntity {
         default: true,
     })
     isTemporaryPassword: boolean;
+
+    @Column({
+        nullable: true,
+    })
+    fcm_token: string;
 }

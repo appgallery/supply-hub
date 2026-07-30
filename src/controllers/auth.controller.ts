@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as authService from "../services/auth.service";
+import { AuthRequest } from "../middleware/auth.middleware";
 
 export const login = async (
     req: Request,
@@ -86,6 +87,40 @@ export const resetPassword = async (req: Request, res: Response) => {
     } catch (error: any) {
         return res.status(400).json({
             status: false,
+            message: error.message,
+        });
+    }
+};
+
+export const saveFcmTokenController = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+        const { fcmToken } = req.body;
+
+        const userId = req.user.userId;
+        
+        if (!fcmToken) {
+            return res.status(400).json({
+                success: false,
+                message: "FCM token is required.",
+            });
+        }
+
+        await authService.saveFcmToken(
+            userId,
+            fcmToken
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "FCM token saved successfully.",
+        });
+
+    } catch (error: any) {
+        return res.status(400).json({
+            success: false,
             message: error.message,
         });
     }
