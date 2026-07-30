@@ -6,10 +6,13 @@ import { OrderItem } from "../entities/OrderItem";
 import { SubClient } from "../entities/SubClient";
 import { User } from "../entities/User";
 import { Variant } from "../entities/Variants";
-import { ActivityType, OrderStatus } from "../utils/constants";
+import { ActivityType, AddressType, OrderStatus } from "../utils/constants";
 import { Product } from "../entities/Product";
 import { ActivityLog } from "../entities/ActivityLog";
 import { createActivity } from "../utils/helper";
+import { Cart } from "../entities/Cart";
+import { Address } from "../entities/Address";
+import { CartItem } from "../entities/CartItem";
 
 export const orderRepository = AppDataSource.getRepository(Order);
 export const orderItemRepository = AppDataSource.getRepository(OrderItem);
@@ -19,26 +22,33 @@ export const userRepository = AppDataSource.getRepository(User);
 export const clientRepository = AppDataSource.getRepository(Client);
 export const productRepository = AppDataSource.getRepository(Product);
 export const activityLogRepository = AppDataSource.getRepository(ActivityLog);
+export const cartRepository = AppDataSource.getRepository(Cart);
+export const cartItemRepository = AppDataSource.getRepository(CartItem);
+export const addressRepository = AppDataSource.getRepository(Address);
 
 export const createOrder = async (
     body: any,
     userId: number
 ) => {
 
-    const { notes, items } = body;
-
-    // validation
-    if (!items || !Array.isArray(items) || items.length === 0) {
-        throw new Error("Order items are required.");
+    const {
+        cartId,
+        shippingAddressId,
+        shipping_amount = 0,
+        tax_amount = 0,
+        payment_method,
+        notes,
+    } = body;
+    if (!cartId) {
+        throw new Error("Cart is required.");
+    }
+    if (!shippingAddressId) {
+        throw new Error("Shipping address is required.");
+    }
+    if (!payment_method) {
+        throw new Error("Payment method is required.");
     }
 
-    const variantIds = items.map((item: any) => item.variantId);
-
-    if (new Set(variantIds).size !== variantIds.length) {
-        throw new Error("Duplicate variants are not allowed in an order.");
-    }
-
-    // find logged-in user
     const user = await userRepository.findOne({
         where: {
             userId,
@@ -49,80 +59,88 @@ export const createOrder = async (
         ],
     });
 
+
     if (!user) {
         throw new Error("User not found.");
     }
 
-    // verify sub client
     if (!user.subClient) {
         throw new Error("Only sub client can place an order.");
     }
 
     const subClient = user.subClient;
-
-    const client = user.subClient.client;
+    const client = subClient.client;
 
     if (!client) {
         throw new Error("Client not found.");
     }
 
-    // calculate total
+    const cart = await cartRepository.findOne({
+        where: {
+            cartId,
+            user_id: userId,
+        },
+        relations: [
+            "cartItems",
+            "cartItems.variant",
+            "cartItems.variant.product",
+            "cartItems.variant.color",
+            "cartItems.variant.size",
+        ],
+    });
+    if (!cart) {
+        throw new Error("Cart not found.");
+    }
+    if (cart.cartItems.length === 0) {
+        throw new Error("Cart is empty.");
+    }
+    const shippingAddress = await addressRepository.findOne({
+        where: {
+            addressId: shippingAddressId,
+            subClientId: subClient.subClientId,
+        },
+    });
+
+
+    if (!shippingAddress) {
+        throw new Error("Shipping address not found.");
+    }
+    const billingAddress = await addressRepository.findOne({
+        where: {
+            subClientId: subClient.subClientId,
+            addressType: AddressType.BILLING,
+        },
+    });
+    if (!billingAddress) {
+        throw new Error("Billing address not found.");
+    }
     let subtotal = 0;
     let totalDiscount = 0;
-    let grandTotal = 0;
-
     const orderItems: OrderItem[] = [];
-
     const variantUpdates: {
         variant: Variant;
         quantity: number;
     }[] = [];
-
-    for (const item of items) {
-
-        if (!item.variantId) {
-            throw new Error("Variant is required.");
+    for (const item of cart.cartItems) {
+        const variant = item.variant;
+        if (!variant || !variant.is_active) {
+            throw new Error("Variant not found.");
         }
-
-        if (!item.quantity || item.quantity <= 0) {
+        if (item.quantity <= 0) {
             throw new Error("Quantity should be greater than zero.");
         }
-
-        const variant = await variantRepository.findOne({
-            where: {
-                variantId: item.variantId,
-                is_active: true,
-            },
-            relations: [
-                "product",
-            ],
-        });
-
-        if (!variant) {
-            throw new Error(`Variant ${item.variantId} not found.`);
-        }
-
         if (variant.stock < item.quantity) {
             throw new Error(
                 `${variant.name} has only ${variant.stock} items available.`
             );
         }
-
         const price = Number(variant.price);
-
         const discount =
             (price * Number(variant.discount_percentage)) / 100;
-
         const finalPrice = price - discount;
-
         const total = finalPrice * item.quantity;
-
         subtotal += price * item.quantity;
-
         totalDiscount += discount * item.quantity;
-
-        grandTotal += total;
-
         const orderItem = orderItemRepository.create({
             variant,
             quantity: item.quantity,
@@ -130,14 +148,18 @@ export const createOrder = async (
             discount,
             total,
         });
-
         orderItems.push(orderItem);
-
         variantUpdates.push({
             variant,
             quantity: item.quantity,
         });
     }
+
+    const finalTotal =
+        subtotal -
+        totalDiscount +
+        Number(shipping_amount) +
+        Number(tax_amount);
 
     const order = orderRepository.create({
         client,
@@ -145,19 +167,23 @@ export const createOrder = async (
         notes,
         subtotal,
         totalDiscount,
-        totalAmount: grandTotal,
-        created_by: user.userId
+        shipping_amount: Number(shipping_amount),
+        totalAmount: finalTotal,
+        payment_method,
+        shippingAddress,
+        billingAddress,
+        created_by: user.userId,
     });
 
-    const savedOrder = await orderRepository.save(order);
+    const savedOrder: Order = await orderRepository.save(order);
 
-    savedOrder.orderNumber = `ORD${savedOrder.orderId
-        .toString()
-        .padStart(6, "0")}`;
+    savedOrder.orderNumber =
+        `ORD${savedOrder.orderId.toString().padStart(6, "0")}`;
 
     await orderRepository.save(savedOrder);
+    const fullName =
+        `${user.firstName} ${user.lastName}`;
 
-    const fullName = `${user.firstName} ${user.lastName}`;
     await createActivity(
         `Order "${savedOrder.orderNumber}" has been placed by Dealer "${subClient.companyName}" (${fullName}).`,
         ActivityType.ORDER_CREATED,
@@ -165,17 +191,22 @@ export const createOrder = async (
         subClient.subClientId,
         user.userId
     );
-
     for (const item of orderItems) {
         item.order = savedOrder;
     }
     await orderItemRepository.save(orderItems);
-
     for (const item of variantUpdates) {
+
         item.variant.stock -= item.quantity;
 
         await variantRepository.save(item.variant);
+
     }
+    // clear cart after successful order creation
+
+    await cartItemRepository.delete({
+        cart_id: cart.cartId,
+    });
 
     const orderDetails = await orderRepository.findOne({
         where: {
@@ -189,13 +220,16 @@ export const createOrder = async (
             "items.variant.product",
             "items.variant.color",
             "items.variant.size",
-        ]
+        ],
     });
-
     return orderDetails;
+
 };
 
-export const getOrders = async (query: any, userId: number) => {
+export const getOrders = async (
+    query: any,
+    userId: number
+) => {
     const {
         offset = 0,
         limit = 10,
@@ -203,7 +237,6 @@ export const getOrders = async (query: any, userId: number) => {
         status,
         subClientId,
     } = query;
-
     const user = await userRepository.findOne({
         where: {
             userId,
@@ -214,44 +247,45 @@ export const getOrders = async (query: any, userId: number) => {
             "subClient.client",
         ],
     });
-
     if (!user) {
         throw new Error("User not found.");
     }
-
     const where: any = {};
-
+    // Client can see all dealer orders
     if (user.client) {
         where.client = {
             clientId: user.client.clientId,
         };
+        if (subClientId) {
+            where.subClient = {
+                subClientId: Number(subClientId),
+            };
+        }
+
     }
 
-    if (user.subClient) {
+    // Dealer can see only own orders
+    else if (user.subClient) {
+
         where.subClient = {
             subClientId: user.subClient.subClientId,
         };
+
     }
 
     if (search) {
         where.orderNumber = Like(`%${search}%`);
     }
-
     if (status) {
         where.status = status;
     }
-
-    if (subClientId && user.client) {
-        where.subClient = {
-            subClientId: Number(subClientId),
-        };
-    }
-
     const [orders, total] = await orderRepository.findAndCount({
         where,
         relations: [
             "client",
             "subClient",
+            "shippingAddress",
+            "billingAddress",
             "items",
             "items.variant",
             "items.variant.product",
@@ -290,42 +324,61 @@ export const getOrderById = async (
         ],
     });
 
+
     if (!user) {
         throw new Error("User not found.");
     }
+
 
     const where: any = {
         orderId,
     };
 
+
+    // Client can view all orders under their company
     if (user.client) {
+
         where.client = {
             clientId: user.client.clientId,
         };
+
     }
 
-    if (user.subClient) {
+    // Dealer can view only own orders
+    else if (user.subClient) {
+
         where.subClient = {
             subClientId: user.subClient.subClientId,
         };
+
     }
 
+
+
     const order = await orderRepository.findOne({
+
         where,
+
         relations: [
             "client",
             "subClient",
+            "shippingAddress",
+            "billingAddress",
             "items",
             "items.variant",
             "items.variant.product",
             "items.variant.color",
             "items.variant.size",
         ],
+
     });
+
+
 
     if (!order) {
         throw new Error("Order not found.");
     }
+
 
     return order;
 };
@@ -389,7 +442,6 @@ export const updateOrder = async (
 ) => {
 
     const { notes } = body;
-
     const user = await userRepository.findOne({
         where: {
             userId,
@@ -399,13 +451,16 @@ export const updateOrder = async (
         ],
     });
 
+
     if (!user) {
         throw new Error("User not found.");
     }
 
+
     if (!user.client) {
-        throw new Error("Only client can update an order.");
+        throw new Error("Only client can update order.");
     }
+
 
     const order = await orderRepository.findOne({
         where: {
@@ -416,18 +471,29 @@ export const updateOrder = async (
         },
     });
 
+
     if (!order) {
         throw new Error("Order not found.");
     }
 
+
     if (order.status !== OrderStatus.PENDING) {
-        throw new Error("Only pending orders can be updated.");
+        throw new Error(
+            "Only pending orders can be updated."
+        );
     }
 
-    order.notes = notes ?? order.notes;
+
+    if (notes !== undefined) {
+        order.notes = notes;
+    }
+
+
     order.updated_by = user.userId;
 
+
     await orderRepository.save(order);
+
 
     return order;
 };
@@ -911,4 +977,109 @@ export const getAdminDashboard = async (
         recentOrders,
         activityFeed,
     };
+};
+export const updateOrderStatus = async (
+    orderId: number,
+    body: any,
+    userId: number
+) => {
+
+    const {
+        status,
+        rejectionReason
+    } = body;
+
+
+    const user = await userRepository.findOne({
+        where: {
+            userId,
+        },
+        relations: [
+            "role",
+            "client",
+        ],
+    });
+
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    if (user.role.name !== "client") {
+        throw new Error(
+            "Only client can approve or reject order."
+        );
+    }
+
+    if (!user.client) {
+        throw new Error("Client profile not found.");
+    }
+
+    const order = await orderRepository.findOne({
+        where: {
+            orderId,
+            client: {
+                clientId: user.client.clientId,
+            },
+        },
+        relations: [
+            "client",
+            "subClient",
+        ],
+    });
+
+
+    if (!order) {
+        throw new Error("Order not found.");
+    }
+
+    if (order.status !== OrderStatus.PENDING) {
+        throw new Error(
+            "Only pending orders can be updated."
+        );
+    }
+
+    if (
+        status !== OrderStatus.APPROVED &&
+        status !== OrderStatus.REJECTED
+    ) {
+        throw new Error(
+            "Invalid order status."
+        );
+    }
+
+    if (status === OrderStatus.APPROVED) {
+        order.status = OrderStatus.APPROVED;
+        order.approvedBy = user;
+        order.approved_at = new Date();
+        await createActivity(
+            `Order "${order.orderNumber}" approved.`,
+            ActivityType.ORDER_APPROVED,
+            order.client.clientId,
+            order.subClient.subClientId,
+            user.userId
+        );
+    }
+
+    if (status === OrderStatus.REJECTED) {
+        if (!rejectionReason) {
+            throw new Error(
+                "Rejection reason is required."
+            );
+        }
+        order.status = OrderStatus.REJECTED;
+        order.rejectedBy = user;
+        order.rejected_at = new Date();
+        order.rejection_reason = rejectionReason;
+        await createActivity(
+            `Order "${order.orderNumber}" rejected.`,
+            ActivityType.ORDER_REJECTED,
+            order.client.clientId,
+            order.subClient.subClientId,
+            user.userId
+        );
+    }
+    order.updated_by = user.userId;
+    await orderRepository.save(order);
+    return order;
 };

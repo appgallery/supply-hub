@@ -13,6 +13,8 @@ import { Client } from "./Client";
 import { SubClient } from "./SubClient";
 import { OrderItem } from "./OrderItem";
 import { OrderStatus } from "../utils/constants";
+import { User } from "./User";
+import { Address } from "./Address";
 
 
 @Entity("orders")
@@ -79,6 +81,44 @@ export class Order {
         nullable: true,
     })
     notes: string;
+
+    @ManyToOne(() => User, { nullable: true })
+    @JoinColumn({ name: "approved_by" })
+    approvedBy: User;
+
+    @Column({ nullable: true })
+    approved_at: Date;
+
+    @ManyToOne(() => User, { nullable: true })
+    @JoinColumn({ name: "rejected_by" })
+    rejectedBy: User;
+
+    @Column({ nullable: true })
+    rejected_at: Date;
+
+    @Column({
+        type: "text",
+        nullable: true,
+    })
+    rejection_reason: string;
+
+    @ManyToOne(() => Address)
+    @JoinColumn({ name: "shippingAddressId" })
+    shippingAddress: Address;
+
+    @ManyToOne(() => Address)
+    @JoinColumn({ name: "billingAddressId" })
+    billingAddress: Address;
+
+    @Column("decimal", {
+        precision: 12,
+        scale: 2,
+        default: 0,
+    })
+    shipping_amount: number;
+
+    @Column()
+    payment_method: string;
 
     @OneToMany(() => OrderItem, (item) => item.order, {
         cascade: true,

@@ -5,12 +5,13 @@ export const generateAccessToken = (user: any) => {
         {
             userId: user.userId,
             roleId: user.role.roleId,
+            roleName: user.role.name,
             clientId: user.client?.clientId,
             subClientId: user.subClient?.subClientId,
         },
         process.env.JWT_SECRET!,
         {
-             expiresIn: "30d",
+            expiresIn: "30d",
         }
     );
 };

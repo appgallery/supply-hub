@@ -10,6 +10,8 @@ import VariantRoute from './variant.route'
 import OrderRoute from './order.route'
 import categoryRoute from './category.route'
 import uploadRoute from './upload.route'
+import cartRoute from './cart.route'
+import addressRoute from './address.route'
 
 const router = Router();
 
@@ -24,5 +26,7 @@ router.use("/variant", VariantRoute);
 router.use("/order", OrderRoute);
 router.use("/category", categoryRoute);
 router.use("/upload", uploadRoute);
+router.use("/cart", cartRoute);
+router.use("/address", addressRoute);
 
 export default router;

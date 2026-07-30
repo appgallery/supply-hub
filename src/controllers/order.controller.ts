@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { createOrder, deleteOrder, getAdminDashboard, getClientDashboard, getOrderById, getOrders, updateOrder } from "../services/order.service";
+import { createOrder, deleteOrder, getAdminDashboard, getClientDashboard, getOrderById, getOrders, updateOrder, updateOrderStatus } from "../services/order.service";
 import { AuthRequest } from "../middleware/auth.middleware";
 
 export const CreateOrdersController = async (
@@ -179,6 +179,40 @@ export const getAdminDashboardController = async (
 
         return res.status(500).json({
             status: false,
+            message: error.message,
+        });
+
+    }
+};
+
+export const updateOrderStatusController = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+
+        const orderId = Number(req.query.orderId);
+
+        const userId = req.user.userId;
+
+        const order = await updateOrderStatus(
+            orderId,
+            req.body,
+            userId
+        );
+
+
+        return res.status(200).json({
+            success: true,
+            message: "Order status updated successfully.",
+            order,
+        });
+
+
+    } catch (error: any) {
+
+        return res.status(400).json({
+            success: false,
             message: error.message,
         });
 
