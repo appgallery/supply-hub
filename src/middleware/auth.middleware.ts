@@ -14,7 +14,7 @@ export const authenticate = (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-
+    console.log("Authorization:", req.headers.authorization);
     if (!authHeader?.startsWith("Bearer ")) {
       return res.status(401).json({
         status: false,
@@ -30,9 +30,10 @@ export const authenticate = (
     );
 
     req.user = decoded;
-
+    console.log("Authorization:", req.headers.authorization);
     next();
   } catch (error) {
+    console.error("JWT Error:", error);
     return res.status(401).json({
       status: false,
       message: "Invalid Token",
