@@ -260,9 +260,10 @@ export const createProduct = async (
                     const variantImage = manager.create(VariantImage, {
                         variant: savedVariant,
                         image_url: image.image_url,
+                        alt_text: image.alt_text,
+                        is_thumbnail: image.is_thumbnail ?? false,
                         created_by: user.userId
                     });
-
                     await manager.save(variantImage);
                 }
             }
