@@ -163,16 +163,22 @@ export const createSubClient = async (
 export const getSubClients = async (
     clientId: number,
     offset: number = 0,
-    limit: number = 10
+    limit: number = 10,
+    subClientId?: number
 ) => {
+    const whereCondition: any = {
+        client: {
+            clientId,
+        },
+        isActive: true,
+    };
+
+    if (subClientId) {
+        whereCondition.subClientId = subClientId;
+    }
 
     const [subClients, total] = await subClientRepository.findAndCount({
-        where: {
-            client: {
-                clientId,
-            },
-            isActive: true,
-        },
+        where: whereCondition,
         relations: [
             "client",
             "createdBy",

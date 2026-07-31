@@ -36,11 +36,15 @@ export const getSubClients = async (
         const clientId = Number(req.query.clientId);
         const offset = Number(req.query.offset) || 0;
         const limit = Number(req.query.limit) || 10;
+        const subClientId = req.query.subClientId
+            ? Number(req.query.subClientId)
+            : undefined;
 
         const result = await subClientService.getSubClients(
             clientId,
             offset,
-            limit
+            limit,
+            subClientId
         );
 
         return res.status(200).json({
