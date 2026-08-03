@@ -206,7 +206,22 @@ export const getCart = async (
             ),
             finalPrice,
             total,
-            variant: item.variant,
+            variant: {
+                variantId: item.variant.variantId,
+                name: item.variant.name,
+                sku: item.variant.sku,
+                price: item.variant.price,
+
+                color: item.variant.color,
+                size: item.variant.size,
+
+                images: item.variant.variantImages?.map((image) => ({
+                    variantImageId: image.variantImageId,
+                    imageUrl: image.image_url,
+                    alt_text: image.alt_text,
+                    is_thumbnail: image.is_thumbnail,
+                })) || [],
+            },
         };
     });
 
