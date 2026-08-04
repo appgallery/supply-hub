@@ -50,6 +50,9 @@ export const getInvoices = async (
             "order.subClient",
             "order.items",
             "order.billingAddress",
+            "order.items.variant",
+            "order.items.variant.product",
+            "order.items.variant.variantImages",
         ],
         order: {
             invoiceId: "DESC",
