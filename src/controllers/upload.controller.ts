@@ -22,16 +22,15 @@ export const uploadFile = async (
                 message: "Folder is required.",
             });
         }
-
-        const result = await uploadService.uploadFile(
-            file,
-            folder
+        const uploadedFiles = await uploadService.uploadFiles(
+            req.files as Express.Multer.File[],
+            "products"
         );
 
         return res.status(200).json({
             status: true,
             message: "File uploaded successfully.",
-            data: result,
+            data: uploadedFiles,
         });
 
     } catch (error: any) {
