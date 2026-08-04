@@ -1027,6 +1027,7 @@ export const updateOrderStatus = async (
     if (!order) {
         throw new Error("Order not found.");
     }
+
     if (order.status !== OrderStatus.PENDING) {
         throw new Error(
             "Only pending orders can be updated."
@@ -1120,11 +1121,14 @@ export const updateOrderStatus = async (
 };
 
 export const generateInvoiceNumber = async (): Promise<string> => {
-    const lastInvoice = await invoiceRepository.findOne({
+    const invoices = await invoiceRepository.find({
         order: {
             invoiceId: "DESC",
         },
+        take: 1,
     });
+
+    const lastInvoice = invoices[0];
 
     if (!lastInvoice) {
         return "INV000001";

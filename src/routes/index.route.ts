@@ -13,6 +13,7 @@ import uploadRoute from './upload.route'
 import cartRoute from './cart.route'
 import addressRoute from './address.route'
 import paymentRoute from './payment.route'
+import invoiveRoute from './invoive.route'
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use("/upload", uploadRoute);
 router.use("/cart", cartRoute);
 router.use("/address", addressRoute);
 router.use("/payment", paymentRoute);
+router.use("/invoice", invoiveRoute);
 
 export default router;
