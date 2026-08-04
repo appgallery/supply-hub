@@ -6,7 +6,7 @@ const router = Router();
 
 router.post(
     "/upload-file",
-    upload.single("file"),
+    upload.array("files", 10),
     uploadController.uploadFile
 );
 export default router;
