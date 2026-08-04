@@ -6,13 +6,13 @@ export const uploadFile = async (
     res: Response
 ) => {
     try {
-        const file = (req as any).file;
+        const files = req.files as Express.Multer.File[];
         const { folder } = req.body;
 
-        if (!file) {
+        if (!files || files.length === 0) {
             return res.status(400).json({
                 status: false,
-                message: "Please select a file.",
+                message: "Please select at least one file.",
             });
         }
 
@@ -22,14 +22,15 @@ export const uploadFile = async (
                 message: "Folder is required.",
             });
         }
+
         const uploadedFiles = await uploadService.uploadFiles(
-            req.files as Express.Multer.File[],
-            "products"
+            files,
+            folder
         );
 
         return res.status(200).json({
             status: true,
-            message: "File uploaded successfully.",
+            message: "Files uploaded successfully.",
             data: uploadedFiles,
         });
 
