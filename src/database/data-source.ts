@@ -25,6 +25,7 @@ import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
 import { ProductTechnicalDetail } from "../entities/ProductTechnicalDetails";
 import { WholesalePriceTier } from "../entities/WholesalePriceTiers";
 import { Address } from "../entities/Address";
+import { Invoice } from "../entities/Invoice";
 
 dotenv.config();
 console.log({
@@ -67,6 +68,7 @@ export const AppDataSource = new DataSource({
         VariantTechnicalDetail,
         ProductTechnicalDetail,
         WholesalePriceTier,
-        Address
+        Address,
+        Invoice
     ],
 });

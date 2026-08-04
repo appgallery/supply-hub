@@ -6,7 +6,7 @@ import { OrderItem } from "../entities/OrderItem";
 import { SubClient } from "../entities/SubClient";
 import { User } from "../entities/User";
 import { Variant } from "../entities/Variants";
-import { ActivityType, AddressType, OrderStatus } from "../utils/constants";
+import { ActivityType, AddressType, InvoiceStatus, OrderStatus } from "../utils/constants";
 import { Product } from "../entities/Product";
 import { ActivityLog } from "../entities/ActivityLog";
 import { createActivity } from "../utils/helper";
@@ -14,6 +14,7 @@ import { Cart } from "../entities/Cart";
 import { Address } from "../entities/Address";
 import { CartItem } from "../entities/CartItem";
 import { sendPushNotification } from "./notification.service";
+import { Invoice } from "../entities/Invoice";
 
 export const orderRepository = AppDataSource.getRepository(Order);
 export const orderItemRepository = AppDataSource.getRepository(OrderItem);
@@ -26,6 +27,7 @@ export const activityLogRepository = AppDataSource.getRepository(ActivityLog);
 export const cartRepository = AppDataSource.getRepository(Cart);
 export const cartItemRepository = AppDataSource.getRepository(CartItem);
 export const addressRepository = AppDataSource.getRepository(Address);
+export const invoiceRepository = AppDataSource.getRepository(Invoice);
 
 export const createOrder = async (
     body: any,
@@ -292,6 +294,7 @@ export const getOrders = async (
             "items.variant.product",
             "items.variant.color",
             "items.variant.size",
+            "items.variant.variantImages"
         ],
         order: {
             created_at: "DESC",
@@ -1041,9 +1044,21 @@ export const updateOrderStatus = async (
         order.status = OrderStatus.APPROVED;
         order.approvedBy = user;
         order.approved_at = new Date();
+
+        await orderRepository.save(order);
+
+        const invoice = invoiceRepository.create({
+            invoiceNumber: await generateInvoiceNumber(),
+            order,
+            amount: order.totalAmount,
+            status: InvoiceStatus.UNPAID,
+        });
+
+        await invoiceRepository.save(invoice);
+
         await createActivity(
-            `Order "${order.orderNumber}" approved.`,
-            ActivityType.ORDER_APPROVED,
+            `Invoice ${invoice.invoiceNumber} generated.`,
+            ActivityType.INVOICE_CREATED,
             order.client.clientId,
             order.subClient.subClientId,
             user.userId
@@ -1102,4 +1117,23 @@ export const updateOrderStatus = async (
         );
     }
     return order;
+};
+
+export const generateInvoiceNumber = async (): Promise<string> => {
+    const lastInvoice = await invoiceRepository.findOne({
+        order: {
+            invoiceId: "DESC",
+        },
+    });
+
+    if (!lastInvoice) {
+        return "INV000001";
+    }
+
+    const lastNumber = parseInt(
+        lastInvoice.invoiceNumber.replace("INV", ""),
+        10
+    );
+
+    return `INV${String(lastNumber + 1).padStart(6, "0")}`;
 };

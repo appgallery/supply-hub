@@ -120,6 +120,11 @@ export class Client extends BaseEntity {
   })
   availableCredit: number;
 
+  @Column({
+    nullable: true,
+  })
+  razorpayLinkedAccountId: string;
+
   @OneToMany(() => User, (user) => user.client)
   users: User[];
 

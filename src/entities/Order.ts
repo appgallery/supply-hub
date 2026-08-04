@@ -12,7 +12,7 @@ import {
 import { Client } from "./Client";
 import { SubClient } from "./SubClient";
 import { OrderItem } from "./OrderItem";
-import { OrderStatus } from "../utils/constants";
+import { OrderStatus, PaymentStatus } from "../utils/constants";
 import { User } from "./User";
 import { Address } from "./Address";
 
@@ -41,6 +41,13 @@ export class Order {
         default: OrderStatus.PENDING,
     })
     status: OrderStatus;
+
+    @Column({
+        type: "enum",
+        enum: PaymentStatus,
+        default: PaymentStatus.PENDING,
+    })
+    payment_status: PaymentStatus;
 
     @Column("decimal", {
         precision: 12,

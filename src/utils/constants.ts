@@ -61,7 +61,9 @@ export enum ActivityType {
   SUB_CLIENT_UPDATED = "SUB_CLIENT_UPDATED",
   SUB_CLIENT_DELETED = "SUB_CLIENT_DELETED",
   ORDER_APPROVED = "ORDER_APPROVED",
-  ORDER_REJECTED = "ORDER_REJECTED"
+  ORDER_REJECTED = "ORDER_REJECTED",
+  PAYMENT_RECEIVED = "PAYMENT_RECEIVED",
+  INVOICE_CREATED = "INVOICE_CREATED"
 }
 
 export enum TaxType {
@@ -73,4 +75,24 @@ export enum TaxType {
 export enum AddressType {
   BILLING = "BILLING",
   SHIPPING = "SHIPPING",
+}
+
+export enum PaymentStatus {
+  PENDING = "PENDING",
+  PAID = "PAID",
+  FAILED = "FAILED",
+  REFUNDED = "REFUNDED",
+}
+
+export enum TransactionStatus {
+  PENDING = "PENDING",
+  SUCCESS = "SUCCESS",
+  FAILED = "FAILED",
+  REFUNDED = "REFUNDED",
+}
+
+export enum InvoiceStatus {
+    UNPAID = "UNPAID",
+    PAID = "PAID",
+    CANCELLED = "CANCELLED",
 }
