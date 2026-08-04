@@ -15,6 +15,7 @@ import { Category } from "../entities/Category";
 import { ProductTechnicalDetail } from "../entities/ProductTechnicalDetails";
 import { VariantTechnicalDetail } from "../entities/VariantTechnicalDetails";
 import { WholesalePriceTier } from "../entities/WholesalePriceTiers";
+import { OrderItem } from "../entities/OrderItem";
 
 const productRepository = AppDataSource.getRepository(Product);
 const userRepository = AppDataSource.getRepository(User);
@@ -819,25 +820,82 @@ export const updateProduct = async (
 
         if (body.variants) {
 
-            // Delete old variants
-            await manager.delete(Variant, {
-                product: {
-                    productId: product.productId,
+            const existingVariants = await manager.find(Variant, {
+                where: {
+                    product: {
+                        productId: product.productId,
+                    },
                 },
+                relations: [
+                    "variantImages",
+                    "technicalDetails",
+                    "wholesalePriceTiers",
+                ],
             });
+
+            const existingIds = existingVariants.map(v => v.variantId);
+
+            const requestIds = body.variants
+                .filter((v: any) => v.variantId)
+                .map((v: any) => v.variantId);
+
+            // Delete removed variants
+            const idsToDelete = existingIds.filter(
+                id => !requestIds.includes(id)
+            );
+
+            for (const variantId of idsToDelete) {
+
+                const orderCount = await manager.count(OrderItem, {
+                    where: {
+                        variant: {
+                            variantId,
+                        },
+                    },
+                });
+
+                if (orderCount > 0) {
+                    throw new Error(
+                        `Variant ${variantId} is used in orders and cannot be deleted.`
+                    );
+                }
+
+                await manager.delete(VariantImage, {
+                    variant: {
+                        variantId,
+                    },
+                });
+
+                await manager.delete(VariantTechnicalDetail, {
+                    variant: {
+                        variantId,
+                    },
+                });
+
+                await manager.delete(WholesalePriceTier, {
+                    variant: {
+                        variantId,
+                    },
+                });
+
+                await manager.delete(Variant, {
+                    variantId,
+                });
+            }
 
             for (const item of body.variants) {
 
-                const existingSku = await manager.findOne(
-                    Variant,
-                    {
-                        where: {
-                            sku: item.sku,
-                        },
-                    }
-                );
+                // SKU validation
+                const existingSku = await manager.findOne(Variant, {
+                    where: {
+                        sku: item.sku,
+                    },
+                });
 
-                if (existingSku) {
+                if (
+                    existingSku &&
+                    existingSku.variantId !== item.variantId
+                ) {
                     throw new Error(
                         `SKU ${item.sku} already exists.`
                     );
@@ -865,103 +923,138 @@ export const updateProduct = async (
                 const discountedPrice =
                     Number(item.price) -
                     (Number(item.price) *
-                        Number(
-                            item.discount_percentage || 0
-                        )) /
+                        Number(item.discount_percentage || 0)) /
                     100;
 
-                const variant = manager.create(Variant, {
-                    product,
-                    name: item.name,
-                    sku: item.sku,
-                    price: item.price,
-                    unit_text: item.unit_text,
-                    min_delivery_days: item.min_delivery_days,
-                    max_delivery_days: item.max_delivery_days,
-                    discount_percentage:
-                        item.discount_percentage || 0,
-                    discounted_price:
-                        discountedPrice,
-                    stock: item.stock,
-                    color,
-                    size,
-                    created_by: user.userId,
-                });
+                let variant: Variant;
 
-                const savedVariant =
-                    await manager.save(variant);
+                // UPDATE
+                if (item.variantId) {
 
-                // Variant Images
-
-                if (item.images?.length) {
-                    for (const image of item.images) {
-                        const variantImage =
-                            manager.create(
-                                VariantImage,
-                                {
-                                    variant:
-                                        savedVariant,
-                                    image_url:
-                                        image.image_url,
-                                    created_by:
-                                        user.userId,
-                                }
-                            );
-
-                        await manager.save(
-                            variantImage
-                        );
-                    }
-                }
-
-                // Variant Technical Details
-
-                if (
-                    item.technicalDetails?.length
-                ) {
-                    for (const detail of item.technicalDetails) {
-                        const technicalDetail =
-                            manager.create(
-                                VariantTechnicalDetail,
-                                {
-                                    variant:
-                                        savedVariant,
-                                    key: detail.key,
-                                    value: detail.value,
-                                }
-                            );
-
-                        await manager.save(
-                            technicalDetail
-                        );
-                    }
-                }
-
-                // ================= Variant Wholesale Price Tiers =================
-
-                if (item.wholesalePriceTiers?.length) {
-
-                    await manager.delete(WholesalePriceTier, {
-                        variant: {
-                            variantId: savedVariant.variantId,
+                    variant = await manager.findOneOrFail(Variant, {
+                        where: {
+                            variantId: item.variantId,
                         },
                     });
 
+                    variant.name = item.name;
+                    variant.sku = item.sku;
+                    variant.price = item.price;
+                    variant.stock = item.stock;
+                    variant.unit_text = item.unit_text;
+                    variant.min_delivery_days = item.min_delivery_days;
+                    variant.max_delivery_days = item.max_delivery_days;
+                    variant.discount_percentage =
+                        item.discount_percentage || 0;
+                    variant.discounted_price =
+                        discountedPrice;
+                    variant.color = color;
+                    variant.size = size;
 
-                    for (const tier of item.wholesalePriceTiers) {
+                    await manager.save(variant);
 
-                        const wholesaleTier = manager.create(
-                            WholesalePriceTier,
-                            {
-                                product,
-                                variant: savedVariant,
-                                min_quantity: tier.min_quantity,
-                                price: tier.price,
+                    await manager.delete(VariantImage, {
+                        variant: {
+                            variantId: variant.variantId,
+                        },
+                    });
+
+                    await manager.delete(
+                        VariantTechnicalDetail,
+                        {
+                            variant: {
+                                variantId:
+                                    variant.variantId,
+                            },
+                        }
+                    );
+
+                    await manager.delete(
+                        WholesalePriceTier,
+                        {
+                            variant: {
+                                variantId:
+                                    variant.variantId,
+                            },
+                        }
+                    );
+
+                } else {
+
+                    // CREATE
+
+                    variant = manager.create(Variant, {
+                        product,
+                        name: item.name,
+                        sku: item.sku,
+                        price: item.price,
+                        stock: item.stock,
+                        unit_text: item.unit_text,
+                        min_delivery_days:
+                            item.min_delivery_days,
+                        max_delivery_days:
+                            item.max_delivery_days,
+                        discount_percentage:
+                            item.discount_percentage || 0,
+                        discounted_price:
+                            discountedPrice,
+                        color,
+                        size,
+                        created_by: user.userId,
+                    });
+
+                    variant = await manager.save(variant);
+                }
+
+                // Images
+                if (item.images?.length) {
+                    for (const image of item.images) {
+                        await manager.save(
+                            manager.create(VariantImage, {
+                                variant,
+                                image_url: image.image_url,
+                                alt_text: image.alt_text,
+                                is_thumbnail:
+                                    image.is_thumbnail,
                                 created_by: user.userId,
-                            }
+                            })
                         );
+                    }
+                }
 
-                        await manager.save(wholesaleTier);
+                // Technical Details
+                if (item.technicalDetails?.length) {
+                    for (const detail of item.technicalDetails) {
+                        await manager.save(
+                            manager.create(
+                                VariantTechnicalDetail,
+                                {
+                                    variant,
+                                    key: detail.key,
+                                    value: detail.value,
+                                }
+                            )
+                        );
+                    }
+                }
+
+                // Wholesale Tiers
+                if (item.wholesalePriceTiers?.length) {
+                    for (const tier of item.wholesalePriceTiers) {
+                        await manager.save(
+                            manager.create(
+                                WholesalePriceTier,
+                                {
+                                    product,
+                                    variant,
+                                    min_quantity:
+                                        tier.min_quantity,
+                                    price: tier.price,
+                                    created_by:
+                                        user.userId,
+                                }
+                            )
+                        );
                     }
                 }
             }
