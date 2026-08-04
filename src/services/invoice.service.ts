@@ -59,23 +59,8 @@ export const getInvoices = async (
     }
 
     const response = invoices.map((invoice) => ({
-        invoiceId: invoice.invoiceId,
-        invoiceNumber: invoice.invoiceNumber,
+        ...invoice,
         amount: Number(invoice.amount),
-        status: invoice.status,
-        createdAt: invoice.created_at,
-        order: {
-            orderId: invoice.order.orderId,
-            orderNumber: invoice.order.orderNumber,
-        },
-        client: {
-            clientId: invoice.order.client.clientId,
-            companyName: invoice.order.client.companyName,
-        },
-        subClient: {
-            subClientId: invoice.order.subClient.subClientId,
-            companyName: invoice.order.subClient.companyName,
-        },
     }));
 
     return invoiceId ? response[0] : response;
