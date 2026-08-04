@@ -164,6 +164,7 @@ export const getCart = async (
             "cartItems.variant.product",
             "cartItems.variant.color",
             "cartItems.variant.size",
+            "cartItems.variant.variantImages",
         ],
     });
 
