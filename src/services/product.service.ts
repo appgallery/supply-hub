@@ -758,11 +758,6 @@ export const updateProduct = async (
         // ================= Product Images =================
 
         if (body.media) {
-            await manager.delete(ProductMedia, {
-                product: {
-                    productId: product.productId,
-                },
-            });
 
             for (const item of body.media) {
                 const media = manager.create(ProductMedia, {
@@ -780,59 +775,140 @@ export const updateProduct = async (
 
         if (body.technicalDetails) {
 
-            await manager.delete(ProductTechnicalDetail, {
-                product: {
-                    productId: product.productId,
+            const existingDetails = await manager.find(ProductTechnicalDetail, {
+                where: {
+                    product: {
+                        productId: product.productId,
+                    },
                 },
             });
 
+            const existingIds = existingDetails.map(
+                d => d.technicalDetailId
+            );
+
+            const requestIds = body.technicalDetails
+                .filter((d: any) => d.technicalDetailId)
+                .map((d: any) => d.technicalDetailId);
+
+            // Delete removed details
+            const idsToDelete = existingIds.filter(
+                id => !requestIds.includes(id)
+            );
+
+            if (idsToDelete.length) {
+                await manager.delete(
+                    ProductTechnicalDetail,
+                    idsToDelete
+                );
+            }
+
+            // Update/Create
             for (const detail of body.technicalDetails) {
-                const technicalDetail =
-                    manager.create(ProductTechnicalDetail, {
+
+                if (detail.technicalDetailId) {
+
+                    const existing = await manager.findOne(ProductTechnicalDetail, {
+                        where: {
+                            technicalDetailId: detail.technicalDetailId,
+                        },
+                    });
+
+                    if (!existing) continue;
+
+                    existing.key = detail.key;
+                    existing.value = detail.value;
+
+                    await manager.save(existing);
+
+                } else {
+
+                    const newDetail = manager.create(ProductTechnicalDetail, {
                         product,
                         key: detail.key,
                         value: detail.value,
                     });
 
-                await manager.save(technicalDetail);
+                    await manager.save(newDetail);
+                }
             }
         }
 
         // ================= Product Wholesale Price Tiers =================
 
         if (body.wholesalePriceTiers) {
-            console.log(
-                "Received Product Wholesale Tiers:",
-                body.wholesalePriceTiers?.length
+
+            const existingTiers = await manager.find(
+                WholesalePriceTier,
+                {
+                    where: {
+                        product: {
+                            productId: product.productId,
+                        },
+                    },
+                }
             );
-            await manager.delete(WholesalePriceTier, {
-                product: {
-                    productId: product.productId,
-                },
-                variant: null,
-            });
 
-            for (const tier of body.wholesalePriceTiers) {
-                console.log("Saving Product Tier", {
-                    min_quantity: tier.min_quantity,
-                    price: tier.price,
-                });
+            const existingIds = existingTiers.map(
+                tier => tier.tierId
+            );
 
-                const wholesaleTier = manager.create(
+            const requestIds = body.wholesalePriceTiers
+                .filter((tier: any) => tier.wholesalePriceTierId)
+                .map((tier: any) => tier.wholesalePriceTierId);
+
+
+            // Delete removed tiers
+            const idsToDelete = existingIds.filter(
+                id => !requestIds.includes(id)
+            );
+
+            if (idsToDelete.length) {
+                await manager.delete(
                     WholesalePriceTier,
-                    {
-                        product,
-                        min_quantity: tier.min_quantity,
-                        price: tier.price,
-                        created_by: user.userId,
-                    }
+                    idsToDelete
                 );
-
-                await manager.save(wholesaleTier);
             }
-            console.log("Finished Saving Product Wholesale Tiers");
-        }
 
+
+            // Update/Create
+            for (const tier of body.wholesalePriceTiers) {
+
+                if (tier.wholesalePriceTierId) {
+
+                    const existing = await manager.findOne(
+                        WholesalePriceTier,
+                        {
+                            where: {
+                                tierId:
+                                    tier.wholesalePriceTierId,
+                            },
+                        }
+                    );
+
+                    if (!existing) continue;
+
+                    existing.min_quantity = tier.min_quantity;
+                    existing.price = tier.price;
+
+                    await manager.save(existing);
+
+                } else {
+
+                    const newTier = manager.create(
+                        WholesalePriceTier,
+                        {
+                            product,
+                            min_quantity: tier.min_quantity,
+                            price: tier.price,
+                            created_by: user.userId,
+                        }
+                    );
+
+                    await manager.save(newTier);
+                }
+            }
+        }
         // ================= Variants =================
 
         if (body.variants) {
@@ -877,23 +953,6 @@ export const updateProduct = async (
                     );
                 }
 
-                await manager.delete(VariantImage, {
-                    variant: {
-                        variantId,
-                    },
-                });
-
-                await manager.delete(VariantTechnicalDetail, {
-                    variant: {
-                        variantId,
-                    },
-                });
-
-                await manager.delete(WholesalePriceTier, {
-                    variant: {
-                        variantId,
-                    },
-                });
 
                 await manager.delete(Variant, {
                     variantId,
@@ -970,32 +1029,6 @@ export const updateProduct = async (
 
                     await manager.save(variant);
 
-                    await manager.delete(VariantImage, {
-                        variant: {
-                            variantId: variant.variantId,
-                        },
-                    });
-
-                    await manager.delete(
-                        VariantTechnicalDetail,
-                        {
-                            variant: {
-                                variantId:
-                                    variant.variantId,
-                            },
-                        }
-                    );
-
-                    await manager.delete(
-                        WholesalePriceTier,
-                        {
-                            variant: {
-                                variantId:
-                                    variant.variantId,
-                            },
-                        }
-                    );
-
                 } else {
 
                     // CREATE
@@ -1023,55 +1056,224 @@ export const updateProduct = async (
                     variant = await manager.save(variant);
                 }
 
-                // Images
-                if (item.images?.length) {
+                // ================= Variant Images =================
+
+                if (item.images) {
+
+                    const existingImages = await manager.find(VariantImage, {
+                        where: {
+                            variant: {
+                                variantId: variant.variantId,
+                            },
+                        },
+                    });
+
+                    const existingIds = existingImages.map(
+                        img => img.variantImageId
+                    );
+
+                    const requestIds = item.images
+                        .filter((img: any) => img.variantImageId)
+                        .map((img: any) => img.variantImageId);
+
+                    // Delete removed images
+                    const idsToDelete = existingIds.filter(
+                        id => !requestIds.includes(id)
+                    );
+
+                    if (idsToDelete.length) {
+                        await manager.delete(
+                            VariantImage,
+                            idsToDelete
+                        );
+                    }
+
+                    // Update/Create
                     for (const image of item.images) {
-                        await manager.save(
-                            manager.create(VariantImage, {
-                                variant,
-                                image_url: image.image_url,
-                                alt_text: image.alt_text,
-                                is_thumbnail:
-                                    image.is_thumbnail,
-                                created_by: user.userId,
-                            })
-                        );
-                    }
-                }
 
-                // Technical Details
-                if (item.technicalDetails?.length) {
-                    for (const detail of item.technicalDetails) {
-                        await manager.save(
-                            manager.create(
-                                VariantTechnicalDetail,
+                        if (image.variantImageId) {
+
+                            const existing = await manager.findOne(
+                                VariantImage,
                                 {
-                                    variant,
-                                    key: detail.key,
-                                    value: detail.value,
+                                    where: {
+                                        variantImageId: image.variantImageId,
+                                    },
                                 }
-                            )
-                        );
+                            );
+
+                            if (!existing) continue;
+
+                            existing.image_url = image.image_url;
+                            existing.alt_text = image.alt_text;
+                            existing.is_thumbnail = image.is_thumbnail;
+
+                            await manager.save(existing);
+
+                        } else {
+
+                            await manager.save(
+                                manager.create(VariantImage, {
+                                    variant,
+                                    image_url: image.image_url,
+                                    alt_text: image.alt_text,
+                                    is_thumbnail: image.is_thumbnail,
+                                    created_by: user.userId,
+                                })
+                            );
+                        }
                     }
                 }
 
-                // Wholesale Tiers
-                if (item.wholesalePriceTiers?.length) {
+                // ================= Variant Wholesale Price Tiers =================
+
+                if (item.wholesalePriceTiers) {
+
+                    const existingTiers = await manager.find(
+                        WholesalePriceTier,
+                        {
+                            where: {
+                                variant: {
+                                    variantId: variant.variantId,
+                                },
+                            },
+                        }
+                    );
+
+
+                    const existingIds = existingTiers.map(
+                        tier => tier.tierId
+                    );
+
+
+                    const requestIds = item.wholesalePriceTiers
+                        .filter((tier: any) => tier.variantWholesalePriceTierId)
+                        .map((tier: any) => tier.variantWholesalePriceTierId);
+
+
+                    // Delete removed tiers
+                    const idsToDelete = existingIds.filter(
+                        id => !requestIds.includes(id)
+                    );
+
+
+                    if (idsToDelete.length) {
+                        await manager.delete(
+                            WholesalePriceTier,
+                            idsToDelete
+                        );
+                    }
+
+
+                    // Update / Create
                     for (const tier of item.wholesalePriceTiers) {
-                        await manager.save(
-                            manager.create(
+
+                        if (tier.variantWholesalePriceTierId) {
+
+                            const existing = await manager.findOne(
                                 WholesalePriceTier,
                                 {
-                                    product,
-                                    variant,
-                                    min_quantity:
-                                        tier.min_quantity,
-                                    price: tier.price,
-                                    created_by:
-                                        user.userId,
+                                    where: {
+                                        tierId:
+                                            tier.variantWholesalePriceTierId,
+                                    },
                                 }
-                            )
+                            );
+
+
+                            if (!existing) continue;
+
+
+                            existing.min_quantity = tier.min_quantity;
+                            existing.price = tier.price;
+
+
+                            await manager.save(existing);
+
+                        } else {
+
+                            const newTier = manager.create(
+                                WholesalePriceTier,
+                                {
+                                    variant,
+                                    min_quantity: tier.min_quantity,
+                                    price: tier.price,
+                                    created_by: user.userId,
+                                }
+                            );
+
+
+                            await manager.save(newTier);
+                        }
+                    }
+                }
+
+                // ================= Variant Technical Details =================
+
+                if (item.technicalDetails) {
+
+                    const existingDetails = await manager.find(VariantTechnicalDetail, {
+                        where: {
+                            variant: {
+                                variantId: variant.variantId,
+                            },
+                        },
+                    });
+
+                    const existingIds = existingDetails.map(
+                        d => d.technicalDetailId
+                    );
+
+                    const requestIds = item.technicalDetails
+                        .filter((d: any) => d.technicalDetailId)
+                        .map((d: any) => d.technicalDetailId);
+
+                    // Delete removed details
+                    const idsToDelete = existingIds.filter(
+                        id => !requestIds.includes(id)
+                    );
+
+                    if (idsToDelete.length) {
+                        await manager.delete(
+                            VariantTechnicalDetail,
+                            idsToDelete
                         );
+                    }
+
+                    // Update/Create
+                    for (const detail of item.technicalDetails) {
+
+                        if (detail.technicalDetailId) {
+
+                            const existing = await manager.findOne(
+                                VariantTechnicalDetail,
+                                {
+                                    where: {
+                                        technicalDetailId: detail.technicalDetailId,
+                                    },
+                                }
+                            );
+
+                            if (!existing) continue;
+
+                            existing.key = detail.key;
+                            existing.value = detail.value;
+
+                            await manager.save(existing);
+
+                        } else {
+
+                            await manager.save(
+                                manager.create(
+                                    VariantTechnicalDetail,
+                                    {
+                                        variant,
+                                        key: detail.key,
+                                        value: detail.value,
+                                    }
+                                )
+                            );
+                        }
                     }
                 }
             }
