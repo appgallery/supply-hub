@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import * as subClientService from "../services/subclient.service";
+import { AuthRequest } from "../middleware/auth.middleware";
 
 export const createSubClient = async (
-    req: Request,
+    req: AuthRequest,
     res: Response,
 ) => {
     try {
@@ -29,11 +30,11 @@ export const createSubClient = async (
 };
 
 export const getSubClients = async (
-    req: Request,
+    req: AuthRequest,
     res: Response,
 ) => {
     try {
-        const clientId = Number(req.query.clientId);
+        const clientId = req.user!.clientId;
         const offset = Number(req.query.offset) || 0;
         const limit = Number(req.query.limit) || 10;
         const subClientId = req.query.subClientId

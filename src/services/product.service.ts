@@ -794,9 +794,7 @@ export const updateProduct = async (
 
             // Update/Create
             for (const item of body.media) {
-
                 if (item.mediaId) {
-
                     const existing = await manager.findOne(
                         ProductMedia,
                         {
@@ -806,14 +804,11 @@ export const updateProduct = async (
                         }
                     );
 
-
                     if (!existing) continue;
-
 
                     existing.media_url = item.media_url;
                     existing.media_type = item.media_type;
                     existing.updated_by = user.userId;
-
 
                     await manager.save(existing);
 
