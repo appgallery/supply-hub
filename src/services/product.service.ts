@@ -94,6 +94,7 @@ export const createProduct = async (
             (Number(base_price) * Number(discount_percentage)) / 100;
         const productCode = await generateProductCode();
 
+        console.log("CREATE PRODUCT START");
         const product = manager.create(Product, {
             productCode,
             productName,
@@ -162,6 +163,8 @@ export const createProduct = async (
                 );
 
                 await manager.save(wholesaleTier);
+
+                console.log("Saving product tier:", tier);
             }
         }
 
@@ -629,6 +632,11 @@ export const updateProduct = async (
     body: any,
     userId: number
 ) => {
+
+    console.log("========== UPDATE PRODUCT API HIT ==========");
+    console.log("Product ID:", productId);
+    console.log("Time:", new Date().toISOString());
+
     return await AppDataSource.transaction(async (manager) => {
         const user = await manager.findOne(User, {
             where: { userId },
@@ -771,6 +779,7 @@ export const updateProduct = async (
         // ================= Product Technical Details =================
 
         if (body.technicalDetails) {
+
             await manager.delete(ProductTechnicalDetail, {
                 product: {
                     productId: product.productId,
@@ -792,7 +801,10 @@ export const updateProduct = async (
         // ================= Product Wholesale Price Tiers =================
 
         if (body.wholesalePriceTiers) {
-
+            console.log(
+                "Received Product Wholesale Tiers:",
+                body.wholesalePriceTiers?.length
+            );
             await manager.delete(WholesalePriceTier, {
                 product: {
                     productId: product.productId,
@@ -801,6 +813,10 @@ export const updateProduct = async (
             });
 
             for (const tier of body.wholesalePriceTiers) {
+                console.log("Saving Product Tier", {
+                    min_quantity: tier.min_quantity,
+                    price: tier.price,
+                });
 
                 const wholesaleTier = manager.create(
                     WholesalePriceTier,
@@ -814,6 +830,7 @@ export const updateProduct = async (
 
                 await manager.save(wholesaleTier);
             }
+            console.log("Finished Saving Product Wholesale Tiers");
         }
 
         // ================= Variants =================
