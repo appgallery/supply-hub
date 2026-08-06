@@ -854,8 +854,8 @@ export const updateProduct = async (
             );
 
             const requestIds = body.wholesalePriceTiers
-                .filter((tier: any) => tier.wholesalePriceTierId)
-                .map((tier: any) => tier.wholesalePriceTierId);
+                .filter((tier: any) => tier.tierId)
+                .map((tier: any) => tier.tierId);
 
 
             // Delete removed tiers
@@ -874,14 +874,14 @@ export const updateProduct = async (
             // Update/Create
             for (const tier of body.wholesalePriceTiers) {
 
-                if (tier.wholesalePriceTierId) {
+                if (tier.tierId) {
 
                     const existing = await manager.findOne(
                         WholesalePriceTier,
                         {
                             where: {
                                 tierId:
-                                    tier.wholesalePriceTierId,
+                                    tier.tierId,
                             },
                         }
                     );
@@ -1147,8 +1147,8 @@ export const updateProduct = async (
 
 
                     const requestIds = item.wholesalePriceTiers
-                        .filter((tier: any) => tier.variantWholesalePriceTierId)
-                        .map((tier: any) => tier.variantWholesalePriceTierId);
+                        .filter((tier: any) => tier.tierId)
+                        .map((tier: any) => tier.tierId);
 
 
                     // Delete removed tiers
@@ -1168,14 +1168,14 @@ export const updateProduct = async (
                     // Update / Create
                     for (const tier of item.wholesalePriceTiers) {
 
-                        if (tier.variantWholesalePriceTierId) {
+                        if (tier.tierId) {
 
                             const existing = await manager.findOne(
                                 WholesalePriceTier,
                                 {
                                     where: {
                                         tierId:
-                                            tier.variantWholesalePriceTierId,
+                                            tier.tierId,
                                     },
                                 }
                             );
@@ -1212,6 +1212,8 @@ export const updateProduct = async (
 
                 if (item.technicalDetails) {
 
+
+
                     const existingDetails = await manager.find(VariantTechnicalDetail, {
                         where: {
                             variant: {
@@ -1219,6 +1221,21 @@ export const updateProduct = async (
                             },
                         },
                     });
+
+                    console.log(
+                        "Variant ID:",
+                        variant.variantId
+                    );
+
+                    console.log(
+                        "Existing Details:",
+                        existingDetails
+                    );
+
+                    console.log(
+                        "Request Details:",
+                        item.technicalDetails
+                    );
 
                     const existingIds = existingDetails.map(
                         d => d.technicalDetailId
