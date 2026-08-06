@@ -759,15 +759,79 @@ export const updateProduct = async (
 
         if (body.media) {
 
-            for (const item of body.media) {
-                const media = manager.create(ProductMedia, {
-                    product,
-                    media_url: item.media_url,
-                    media_type: item.media_type,
-                    created_by: user.userId,
-                });
+            const existingMedia = await manager.find(ProductMedia, {
+                where: {
+                    product: {
+                        productId: product.productId,
+                    },
+                },
+            });
 
-                await manager.save(media);
+
+            const existingIds = existingMedia.map(
+                media => media.mediaId
+            );
+
+
+            const requestIds = body.media
+                .filter((media: any) => media.mediaId)
+                .map((media: any) => media.mediaId);
+
+
+            // Delete removed media
+            const idsToDelete = existingIds.filter(
+                id => !requestIds.includes(id)
+            );
+
+
+            if (idsToDelete.length) {
+                await manager.delete(
+                    ProductMedia,
+                    idsToDelete
+                );
+            }
+
+
+            // Update/Create
+            for (const item of body.media) {
+
+                if (item.mediaId) {
+
+                    const existing = await manager.findOne(
+                        ProductMedia,
+                        {
+                            where: {
+                                mediaId: item.mediaId,
+                            },
+                        }
+                    );
+
+
+                    if (!existing) continue;
+
+
+                    existing.media_url = item.media_url;
+                    existing.media_type = item.media_type;
+                    existing.updated_by = user.userId;
+
+
+                    await manager.save(existing);
+
+                } else {
+
+                    const newMedia = manager.create(
+                        ProductMedia,
+                        {
+                            product,
+                            media_url: item.media_url,
+                            media_type: item.media_type,
+                            created_by: user.userId,
+                        }
+                    );
+
+
+                    await manager.save(newMedia);
+                }
             }
         }
 
