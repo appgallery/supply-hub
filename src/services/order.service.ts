@@ -37,19 +37,14 @@ export const createOrder = async (
     const {
         cartId,
         shippingAddressId,
-        shipping_amount = 0,
-        tax_amount = 0,
-        payment_method,
-        notes,
     } = body;
+
     if (!cartId) {
         throw new Error("Cart is required.");
     }
+
     if (!shippingAddressId) {
         throw new Error("Shipping address is required.");
-    }
-    if (!payment_method) {
-        throw new Error("Payment method is required.");
     }
 
     const user = await userRepository.findOne({
@@ -61,7 +56,6 @@ export const createOrder = async (
             "subClient.client",
         ],
     });
-
 
     if (!user) {
         throw new Error("User not found.");
@@ -91,12 +85,15 @@ export const createOrder = async (
             "cartItems.variant.size",
         ],
     });
+
     if (!cart) {
         throw new Error("Cart not found.");
     }
+
     if (cart.cartItems.length === 0) {
         throw new Error("Cart is empty.");
     }
+
     const shippingAddress = await addressRepository.findOne({
         where: {
             addressId: shippingAddressId,
@@ -104,46 +101,59 @@ export const createOrder = async (
         },
     });
 
-
     if (!shippingAddress) {
         throw new Error("Shipping address not found.");
     }
+
     const billingAddress = await addressRepository.findOne({
         where: {
             subClientId: subClient.subClientId,
             addressType: AddressType.BILLING,
         },
     });
+
     if (!billingAddress) {
         throw new Error("Billing address not found.");
     }
+
     let subtotal = 0;
     let totalDiscount = 0;
+
     const orderItems: OrderItem[] = [];
+
     const variantUpdates: {
         variant: Variant;
         quantity: number;
     }[] = [];
+
     for (const item of cart.cartItems) {
+
         const variant = item.variant;
+
         if (!variant || !variant.is_active) {
             throw new Error("Variant not found.");
         }
+
         if (item.quantity <= 0) {
             throw new Error("Quantity should be greater than zero.");
         }
+
         if (variant.stock < item.quantity) {
             throw new Error(
                 `${variant.name} has only ${variant.stock} items available.`
             );
         }
+
         const price = Number(variant.price);
         const discount =
             (price * Number(variant.discount_percentage)) / 100;
+
         const finalPrice = price - discount;
         const total = finalPrice * item.quantity;
+
         subtotal += price * item.quantity;
         totalDiscount += discount * item.quantity;
+
         const orderItem = orderItemRepository.create({
             variant,
             quantity: item.quantity,
@@ -151,41 +161,47 @@ export const createOrder = async (
             discount,
             total,
         });
+
         orderItems.push(orderItem);
+
         variantUpdates.push({
             variant,
             quantity: item.quantity,
         });
     }
 
+    // Backend managed values
+    const shipping_amount = 50;
+    const tax = 18;
+
     const finalTotal =
         subtotal -
         totalDiscount +
-        Number(shipping_amount) +
-        Number(tax_amount);
+        shipping_amount +
+        tax;
 
     const order = orderRepository.create({
         client,
         subClient,
-        notes,
         subtotal,
         totalDiscount,
-        shipping_amount: Number(shipping_amount),
+        shipping_amount,
+        tax,
         totalAmount: finalTotal,
-        payment_method,
         shippingAddress,
         billingAddress,
         created_by: user.userId,
     });
 
-    const savedOrder: Order = await orderRepository.save(order);
+    const savedOrder = await orderRepository.save(order);
 
-    savedOrder.orderNumber =
-        `ORD${savedOrder.orderId.toString().padStart(6, "0")}`;
+    savedOrder.orderNumber = `ORD${savedOrder.orderId
+        .toString()
+        .padStart(6, "0")}`;
 
     await orderRepository.save(savedOrder);
-    const fullName =
-        `${user.firstName} ${user.lastName}`;
+
+    const fullName = `${user.firstName} ${user.lastName}`;
 
     await createActivity(
         `Order "${savedOrder.orderNumber}" has been placed by Dealer "${subClient.companyName}" (${fullName}).`,
@@ -194,19 +210,19 @@ export const createOrder = async (
         subClient.subClientId,
         user.userId
     );
+
     for (const item of orderItems) {
         item.order = savedOrder;
     }
+
     await orderItemRepository.save(orderItems);
+
     for (const item of variantUpdates) {
-
         item.variant.stock -= item.quantity;
-
         await variantRepository.save(item.variant);
-
     }
-    // clear cart after successful order creation
 
+    // Clear cart
     await cartItemRepository.delete({
         cart_id: cart.cartId,
     });
@@ -223,10 +239,12 @@ export const createOrder = async (
             "items.variant.product",
             "items.variant.color",
             "items.variant.size",
+            "shippingAddress",
+            "billingAddress",
         ],
     });
-    return orderDetails;
 
+    return orderDetails;
 };
 
 export const getOrders = async (
