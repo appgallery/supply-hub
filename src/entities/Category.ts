@@ -39,6 +39,11 @@ export class Category {
     description: string;
 
     @Column({
+        default: false,
+    })
+    isAsync: boolean;
+
+    @Column({
         default: true,
     })
     isActive: boolean;

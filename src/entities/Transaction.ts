@@ -41,6 +41,11 @@ export class Transaction extends BaseEntity {
     currency: string;
 
     @Column({
+        nullable: true,
+    })
+    razorpayTransferId: string;
+
+    @Column({
         type: "enum",
         enum: TransactionStatus,
         default: TransactionStatus.PENDING,

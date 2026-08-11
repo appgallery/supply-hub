@@ -138,9 +138,9 @@ export const getClientDashboardController = async (
     res: Response
 ) => {
     try {
-
+        const clientId = req.user!.clientId;
         const result = await getClientDashboard(
-            req.user!.userId
+            clientId
         );
 
         return res.status(200).json({
@@ -203,7 +203,7 @@ export const updateOrderStatusController = async (
 
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Order status updated successfully.",
             order,
         });

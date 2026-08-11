@@ -125,6 +125,16 @@ export class Client extends BaseEntity {
   })
   razorpayLinkedAccountId: string;
 
+  @Column({
+    default: "PENDING"
+  })
+  razorpayAccountStatus: string;
+
+  @Column({
+    nullable: true,
+  })
+  razorpayOnboardingUrl: string;
+
   @OneToMany(() => User, (user) => user.client)
   users: User[];
 

@@ -14,4 +14,8 @@ router.put("/update-category", authenticate, categoryController.updateCategoryCo
 
 router.delete("/delete-category", authenticate, categoryController.deleteCategoryController);
 
-export default router;
+router.get("/generate-category-xml",authenticate, categoryController.generateCategoryXmlController);
+
+router.get("/read-category-from-tally",authenticate, categoryController.readCategoryController);
+
+export default router; 

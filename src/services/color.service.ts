@@ -1,7 +1,6 @@
 import { AppDataSource } from "../database/data-source";
 import { Color } from "../entities/Color";
 
-
 const colorRepository = AppDataSource.getRepository(Color);
 
 export const createColor = async (body: any) => {

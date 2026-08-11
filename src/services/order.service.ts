@@ -503,28 +503,8 @@ export const updateOrder = async (
 };
 
 export const getClientDashboard = async (
-    userId: number
+    clientId: number
 ) => {
-
-    // Find logged-in user
-    const user = await userRepository.findOne({
-        where: {
-            userId,
-        },
-        relations: [
-            "client",
-            "role",
-        ],
-    });
-
-    if (!user) {
-        throw new Error("User not found.");
-    }
-
-    if (user.role.name.toLowerCase() !== "client") {
-        throw new Error("Only client can access this dashboard.");
-    }
-
     const now = new Date();
 
     const startCurrentMonth = new Date(
@@ -562,7 +542,7 @@ export const getClientDashboard = async (
         where: {
             category: {
                 client: {
-                    clientId: user.client.clientId,
+                    clientId: clientId
                 },
             },
             created_at: Between(startCurrentMonth, now),
@@ -573,7 +553,7 @@ export const getClientDashboard = async (
         where: {
             category: {
                 client: {
-                    clientId: user.client.clientId,
+                    clientId: clientId,
                 },
             },
             created_at: Between(startLastMonth, endLastMonth),
@@ -583,7 +563,7 @@ export const getClientDashboard = async (
     const currentOrders = await orderRepository.count({
         where: {
             client: {
-                clientId: user.client.clientId,
+                clientId: clientId,
             },
             created_at: Between(startCurrentMonth, now),
         },
@@ -592,7 +572,7 @@ export const getClientDashboard = async (
     const lastMonthOrders = await orderRepository.count({
         where: {
             client: {
-                clientId: user.client.clientId,
+                clientId: clientId,
             },
             created_at: Between(startLastMonth, endLastMonth),
         },
@@ -601,7 +581,7 @@ export const getClientDashboard = async (
     const currentDealers = await subClientRepository.count({
         where: {
             client: {
-                clientId: user.client.clientId,
+                clientId: clientId,
             },
             createdAt: Between(startCurrentMonth, now),
         },
@@ -610,7 +590,7 @@ export const getClientDashboard = async (
     const lastMonthDealers = await subClientRepository.count({
         where: {
             client: {
-                clientId: user.client.clientId,
+                clientId: clientId,
             },
             createdAt: Between(startLastMonth, endLastMonth),
         },
@@ -620,7 +600,7 @@ export const getClientDashboard = async (
         .createQueryBuilder("order")
         .select("COALESCE(SUM(order.totalAmount),0)", "revenue")
         .where("order.clientId = :clientId", {
-            clientId: user.client.clientId,
+            clientId: clientId,
         })
         .andWhere("order.created_at BETWEEN :start AND :end", {
             start: startCurrentMonth,
@@ -632,7 +612,7 @@ export const getClientDashboard = async (
         .createQueryBuilder("order")
         .select("COALESCE(SUM(order.totalAmount),0)", "revenue")
         .where("order.clientId = :clientId", {
-            clientId: user.client.clientId,
+            clientId: clientId,
         })
         .andWhere("order.created_at BETWEEN :start AND :end", {
             start: startLastMonth,
@@ -641,13 +621,19 @@ export const getClientDashboard = async (
         .getRawOne();
     const totalClients = await clientRepository.count();
 
-    const totalDealers = await subClientRepository.count();
+    const totalDealers = await subClientRepository.count({
+        where: {
+            client: {
+                clientId,
+            },
+        },
+    });
 
     const totalProducts = await productRepository.count({
         where: {
             category: {
                 client: {
-                    clientId: user.client.clientId,
+                    clientId: clientId,
                 },
             },
         },
@@ -656,7 +642,7 @@ export const getClientDashboard = async (
     const totalOrders = await orderRepository.count({
         where: {
             client: {
-                clientId: user.client.clientId,
+                clientId: clientId,
             },
         },
     });
@@ -665,7 +651,7 @@ export const getClientDashboard = async (
         .createQueryBuilder("order")
         .select("SUM(order.totalAmount)", "revenue")
         .where("order.clientId = :clientId", {
-            clientId: user.client.clientId,
+            clientId: clientId,
         })
         .getRawOne();
 
@@ -674,6 +660,7 @@ export const getClientDashboard = async (
         .leftJoin("order.subClient", "subClient")
         .select("subClient.companyName", "companyName")
         .addSelect("SUM(order.totalAmount)", "revenue")
+        .where("order.clientId = :clientId", { clientId })
         .groupBy("subClient.subClientId")
         .orderBy("SUM(order.totalAmount)", "DESC")
         .limit(10)
@@ -682,7 +669,7 @@ export const getClientDashboard = async (
     const recentOrders = await orderRepository.find({
         where: {
             client: {
-                clientId: user.client.clientId,
+                clientId: clientId,
             },
         },
         relations: [
@@ -697,7 +684,7 @@ export const getClientDashboard = async (
     const recentClients = await subClientRepository.find({
         where: {
             client: {
-                clientId: user.client.clientId,
+                clientId: clientId,
             },
         },
         order: {
@@ -708,7 +695,7 @@ export const getClientDashboard = async (
 
     const activityFeed = await activityLogRepository.find({
         where: {
-            clientId: user.client.clientId,
+            clientId: clientId,
         },
         order: {
             created_at: "DESC",

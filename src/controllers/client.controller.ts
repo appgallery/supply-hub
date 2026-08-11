@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as clientService from "../services/client.service";
+import { getRazorpayAccountStatus } from "../services/client.service";
+import { AuthRequest } from "../middleware/auth.middleware";
 
 export const createClient = async (
     req: Request,
@@ -31,11 +33,17 @@ export const getClients = async (
     next: NextFunction
 ) => {
     try {
-
         const offset = Number(req.query.offset) || 0;
         const limit = Number(req.query.limit) || 10;
+        const clientId = req.query.clientId
+            ? Number(req.query.clientId)
+            : undefined;
 
-        const result = await clientService.getClients(offset, limit);
+        const result = await clientService.getClients(
+            offset,
+            limit,
+            clientId
+        );
 
         return res.status(200).json({
             status: true,
@@ -43,17 +51,14 @@ export const getClients = async (
             total: result.total,
             offset: result.offset,
             limit: result.limit,
-            data: result.data
+            data: result.data,
         });
-
     } catch (error: any) {
-
         return res.status(500).json({
             status: false,
             message: error.message || "Internal server error",
             data: null,
         });
-
     }
 };
 
@@ -127,4 +132,36 @@ export const deleteClient = async (
         });
 
     }
+};
+
+export const getClientRazorpayStatus = async (
+    req: AuthRequest,
+    res: Response
+) => {
+
+    try {
+
+        const clientId = req.user.clientId;
+        const result =
+            await getRazorpayAccountStatus(
+                clientId
+            );
+
+        return res.status(200).json({
+            status: true,
+            message: "Razorpay account status fetched successfully.",
+            data: result
+        });
+
+
+    } catch (error: any) {
+
+        return res.status(500).json({
+            status: false,
+            message: error.message || "Internal server error",
+            data: null,
+        });
+
+    }
+
 };

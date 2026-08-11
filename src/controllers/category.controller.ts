@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { createCategory, deleteCategory, getCategories, getCategoryById, updateCategory } from "../routes/category.service";
+import { createCategory, deleteCategory, generateCategoryXml, getCategories, getCategoryById, readCategoriesFromTallyService, updateCategory } from "../services/category.service";
+import { AuthRequest } from "../middleware/auth.middleware";
 
 export const createCategoryController = async (
     req: Request,
@@ -126,6 +127,76 @@ export const deleteCategoryController = async (
         return res.status(400).json({
             status: false,
             message: error.message,
+        });
+
+    }
+};
+
+export const generateCategoryXmlController = async (
+    req: AuthRequest,
+    res: Response
+) => {
+
+    try {
+
+        const user = req.user;
+        console.log("user", user)
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized"
+            });
+        }
+
+
+        const result = await generateCategoryXml(
+            user.clientId
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Category XML generated successfully.",
+            data: result
+        });
+
+
+    } catch (error: any) {
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+export const readCategoryController = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+        const user = req.user;
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized"
+            });
+        }
+
+        const categories = await readCategoriesFromTallyService();
+
+        return res.status(200).json({
+            success: true,
+            message: "Categories fetched successfully.",
+            data: categories
+        });
+
+    } catch (error: any) {
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
         });
 
     }

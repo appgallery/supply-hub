@@ -1,8 +1,13 @@
+import { In } from "typeorm";
 import { AppDataSource } from "../database/data-source";
 import { Category } from "../entities/Category";
 import { Client } from "../entities/Client";
 import { User } from "../entities/User";
 import { Role } from "../utils/constants";
+import { generateCategoryXML, generateReadCategoryXML, sendCategoryXmlToTally } from "./categoryml.service";
+import { emit } from "cluster";
+import axios from "axios";
+import { XMLParser } from "fast-xml-parser";
 
 const categoryRepository = AppDataSource.getRepository(Category);
 const clientRepository = AppDataSource.getRepository(Client);
@@ -196,4 +201,82 @@ export const generateCategoryCode = async () => {
     );
 
     return `CAT${String(lastNumber + 1).padStart(6, "0")}`;
+};
+
+export const generateCategoryXml = async (clientId: number) => {
+    console.log("ClientId", clientId)
+    const categories = await categoryRepository.find({
+        where: {
+            client: {
+                clientId
+            },
+            isAsync: false
+        },
+
+    });
+    console.log("categories", categories)
+
+
+    if (!categories.length) {
+        throw new Error("No unsynced categories found.");
+    }
+
+
+    const xml = generateCategoryXML(categories);
+
+    const tallyResponse = await sendCategoryXmlToTally(
+        xml
+    );
+    console.log("tallyResponse", tallyResponse)
+
+    // Check Tally response before updating
+    // Example condition (depends on Tally response format)
+    if (tallyResponse) {
+
+        await categoryRepository.update(
+            {
+                categoryId: In(
+                    categories.map(
+                        category => category.categoryId
+                    )
+                )
+            },
+            {
+                isAsync: true
+            }
+        );
+
+    }
+
+    return {
+        count: categories.length,
+        xml,
+        tallyResponse
+    };
+};
+
+export const readCategoriesFromTallyService = async () => {
+    const xml = generateReadCategoryXML();
+
+    console.log("===== XML SENT TO TALLY =====");
+    console.log(xml);
+
+    const response = await axios.post(
+        "http://192.168.1.108:9000",
+        xml,
+        {
+            headers: {
+                "Content-Type": "text/xml"
+            }
+        }
+    );
+
+    const parser = new XMLParser({
+        ignoreAttributes: false,
+        attributeNamePrefix: ""
+    });
+
+    const json = parser.parse(response.data);
+
+    return json;
 };

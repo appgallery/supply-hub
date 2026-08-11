@@ -8,6 +8,7 @@ router.post("/create-client" , authenticate,clientcontroller.createClient);
 router.get("/get-clients", authenticate , clientcontroller.getClients);
 router.put("/update-client", authenticate , clientcontroller.updateClient);
 router.delete("/delete-client", authenticate , clientcontroller.deleteClient);
+router.get("/get-razor-pay-status", authenticate , clientcontroller.getClientRazorpayStatus);
 
 
 export default router;

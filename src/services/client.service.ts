@@ -7,6 +7,7 @@ import { Role } from "../entities/Role";
 import { createActivity } from "../utils/helper";
 import { ActivityType } from "../utils/constants";
 import { ClientOwner } from "../entities/ClientOwner";
+import axios from "axios";
 const clientRepository = AppDataSource.getRepository(Client);
 const userRepository = AppDataSource.getRepository(User);
 const roleRepository = AppDataSource.getRepository(Role);
@@ -135,8 +136,35 @@ export const createClient = async (
         createdBy,
     });
 
+
     await clientRepository.save(client);
 
+    try {
+        const linkedAccount =
+            await createRazorpayLinkedAccount(client);
+
+        client.razorpayLinkedAccountId = linkedAccount.id;
+
+        // Generate onboarding link
+        const onboarding =
+            await createOnboardingLink(
+                linkedAccount.id
+            );
+
+        // Save onboarding url
+        client.razorpayOnboardingUrl =
+            onboarding.short_url;
+
+        await clientRepository.save(client);
+    } catch (error: any) {
+        console.error(
+            "Razorpay Linked Account Error:",
+            error.response?.data || error.message
+        );
+
+        // Optional:
+        // throw error;
+    }
     // Create Login User
     const user = userRepository.create({
         firstName: owner.firstName,
@@ -209,8 +237,17 @@ export const createClient = async (
 };
 export const getClients = async (
     offset: number = 0,
-    limit: number = 10
+    limit: number = 10,
+    clientId?: number
 ) => {
+
+    const where: any = {
+        isActive: true,
+    };
+
+    if (clientId) {
+        where.clientId = clientId;
+    }
 
     const [clients, total] = await clientRepository.findAndCount({
         relations: [
@@ -218,11 +255,9 @@ export const getClients = async (
             "createdBy",
             "subClients",
             "products",
-            "owners"
+            "owners",
         ],
-        where: {
-            isActive: true,
-        },
+        where,
         order: {
             createdAt: "DESC",
         },
@@ -580,4 +615,151 @@ export const generateClientCode = async () => {
     );
 
     return `CLI${String(lastNumber + 1).padStart(6, "0")}`;
+};
+
+export const createRazorpayLinkedAccount = async (
+    client: Client
+) => {
+    try {
+        const response = await axios.post(
+            "https://api.razorpay.com/v2/accounts",
+            {
+                email: client.email,
+                phone: client.mobile,
+                type: "route",
+
+                reference_id: client.clientCode,
+
+                legal_business_name: client.companyName,
+
+                business_type: (
+                    client.businessType || "proprietorship"
+                ).toLowerCase(),
+
+                contact_name: client.contactPerson,
+
+                profile: {
+                    category: "ecommerce",
+                    subcategory: "b2b",
+
+                    addresses: {
+                        registered: {
+                            street1: client.address,
+                            city: client.city,
+                            state: client.state,
+                            postal_code: client.postalCode,
+                            country: client.country || "IN",
+                        },
+                    },
+                },
+
+                legal_info: {
+                    pan: client.panNumber,
+                    gst: client.gstNumber,
+                },
+            },
+            {
+                auth: {
+                    username: process.env.RAZORPAY_KEY_ID!,
+                    password:
+                        process.env.RAZORPAY_KEY_SECRET!,
+                },
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+            }
+        );
+
+        return response.data;
+    } catch (error: any) {
+        console.error(
+            "Razorpay Linked Account Error:",
+            error.response?.data || error.message
+        );
+
+        throw new Error(
+            error.response?.data?.error?.description ||
+            "Unable to create Razorpay linked account."
+        );
+    }
+};
+
+
+export const getRazorpayAccountStatus = async (
+    clientId: number
+) => {
+
+    const client = await clientRepository.findOne({
+        where: {
+            clientId,
+        },
+    });
+
+    if (!client) {
+        throw new Error("Client not found.");
+    }
+
+    if (!client.razorpayLinkedAccountId) {
+        throw new Error(
+            "Client is not onboarded with Razorpay."
+        );
+    }
+
+    try {
+
+        const response = await axios.get(
+            `https://api.razorpay.com/v2/accounts/${client.razorpayLinkedAccountId}`,
+            {
+                auth: {
+                    username: process.env.RAZORPAY_KEY_ID!,
+                    password: process.env.RAZORPAY_KEY_SECRET!,
+                },
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        const account = response.data;
+
+        client.razorpayAccountStatus = account.status;
+
+        await clientRepository.save(client);
+
+        return {
+            clientId: client.clientId,
+            companyName: client.companyName,
+            razorpayLinkedAccountId:
+                client.razorpayLinkedAccountId,
+            accountStatus: account.status,
+            account,
+        };
+
+    } catch (error: any) {
+
+        console.error(
+            "Razorpay Error:",
+            error.response?.data || error.message
+        );
+
+        throw new Error(
+            error.response?.data?.error?.description ||
+            "Unable to fetch Razorpay account status."
+        );
+
+    }
+};
+
+export const createOnboardingLink = async (
+    linkedAccountId: string
+) => {
+    // TODO:
+    // Call the Razorpay Route Account Onboarding API
+    // once Route onboarding is enabled for your account.
+
+    return {
+        short_url: null,
+        status: "PENDING",
+    };
 };

@@ -23,7 +23,6 @@ const userRepository = AppDataSource.getRepository(User);
 export const createPayment = async (
     invoiceId: number
 ) => {
-
     const invoice = await invoiceRepository.findOne({
         where: {
             invoiceId,
@@ -44,20 +43,21 @@ export const createPayment = async (
     }
 
     if (!invoice.order.client.razorpayLinkedAccountId) {
-        throw new Error("Client is not onboarded with Razorpay Partner.");
+        throw new Error(
+            "Client is not onboarded with Razorpay Partner."
+        );
     }
 
-    const existingTransaction = await transactionRepository.findOne({
-        where: {
-            invoice: {
-                invoiceId,
+    const existingTransaction =
+        await transactionRepository.findOne({
+            where: {
+                invoice: {
+                    invoiceId,
+                },
+                status: TransactionStatus.SUCCESS,
             },
-            status: TransactionStatus.SUCCESS,
-        },
-        relations: [
-            "invoice",
-        ],
-    });
+            relations: ["invoice"],
+        });
 
     if (existingTransaction) {
         throw new Error("Payment already completed.");
@@ -66,7 +66,7 @@ export const createPayment = async (
     const razorpayOrder = await razorpay.orders.create({
         amount: Math.round(Number(invoice.amount) * 100),
         currency: "INR",
-        receipt: invoice.invoiceNumber
+        receipt: invoice.invoiceNumber,
     });
 
     const transaction = transactionRepository.create({
@@ -159,11 +159,43 @@ export const verifyPayment = async (
     }
 
     // Update Transaction
+    // Save payment details first
     transaction.razorpayPaymentId = razorpay_payment_id;
     transaction.razorpaySignature = razorpay_signature;
-    transaction.status = TransactionStatus.SUCCESS;
 
-    await transactionRepository.save(transaction);
+    const client = transaction.invoice.order.client;
+
+    if (!client.razorpayLinkedAccountId) {
+        throw new Error("Client is not onboarded with Razorpay.");
+    }
+
+    try {
+        const transfer = await razorpay.payments.transfer(
+            razorpay_payment_id,
+            {
+                transfers: [
+                    {
+                        account: client.razorpayLinkedAccountId,
+                        amount: Math.round(Number(transaction.amount) * 100),
+                        currency: transaction.currency,
+                    },
+                ],
+            }
+        );
+
+        transaction.razorpayTransferId = transfer.items[0].id;
+        transaction.status = TransactionStatus.SUCCESS;
+
+        await transactionRepository.save(transaction);
+
+    } catch (error: any) {
+        transaction.status = TransactionStatus.FAILED;
+        await transactionRepository.save(transaction);
+
+        throw new Error(
+            `Payment received but transfer failed: ${error.error?.description || error.message}`
+        );
+    }
 
     // Update Invoice
     const invoice = transaction.invoice;
@@ -172,7 +204,6 @@ export const verifyPayment = async (
     invoice.updatedBy = user;
 
     await invoiceRepository.save(invoice);
-
     // Update Order
     const order = invoice.order;
 
