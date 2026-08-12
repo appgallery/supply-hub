@@ -92,7 +92,15 @@ export enum TransactionStatus {
 }
 
 export enum InvoiceStatus {
-    UNPAID = "UNPAID",
-    PAID = "PAID",
-    CANCELLED = "CANCELLED",
+  UNPAID = "UNPAID",
+  PAID = "PAID",
+  CANCELLED = "CANCELLED",
+}
+
+export enum PaymentMethod {
+  BANK_REMITTANCE = "BANK_REMITTANCE",
+  CHEQUE = "CHEQUE",
+  CASH = "CASH",
+  OTHER = "OTHER",
+  ONLINE = "ONLINE",
 }

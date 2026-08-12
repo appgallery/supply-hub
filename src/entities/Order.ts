@@ -12,7 +12,7 @@ import {
 import { Client } from "./Client";
 import { SubClient } from "./SubClient";
 import { OrderItem } from "./OrderItem";
-import { OrderStatus, PaymentStatus } from "../utils/constants";
+import { OrderStatus, PaymentMethod, PaymentStatus } from "../utils/constants";
 import { User } from "./User";
 import { Address } from "./Address";
 
@@ -124,8 +124,12 @@ export class Order {
     })
     shipping_amount: number;
 
-    @Column()
-    payment_method: string;
+    @Column({
+        type: "enum",
+        enum: PaymentMethod,
+        nullable: true,
+    })
+    payment_method: PaymentMethod;
 
     @OneToMany(() => OrderItem, (item) => item.order, {
         cascade: true,
