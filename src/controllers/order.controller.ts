@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { createOrder, deleteOrder, getAdminDashboard, getClientDashboard, getOrderById, getOrders, updateOrder, updateOrderStatus } from "../services/order.service";
+import { createOrder, deleteOrder, getAdminDashboard, getClientDashboard, getOrderById, getOrders, selectPaymentMethod, updateOrder, updateOrderStatus } from "../services/order.service";
 import { AuthRequest } from "../middleware/auth.middleware";
 
 export const CreateOrdersController = async (
@@ -213,6 +213,36 @@ export const updateOrderStatusController = async (
 
         return res.status(400).json({
             success: false,
+            message: error.message,
+        });
+
+    }
+};
+
+export const selectPaymentMethodController = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+
+        const orderId = Number(req.query.orderId);
+
+        const result = await selectPaymentMethod(
+            orderId,
+            req.body,
+            req.user!.userId
+        );
+
+        return res.status(200).json({
+            status: true,
+            message: "Payment method selected successfully.",
+            data: result,
+        });
+
+    } catch (error: any) {
+
+        return res.status(500).json({
+            status: false,
             message: error.message,
         });
 

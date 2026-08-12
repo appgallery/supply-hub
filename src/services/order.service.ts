@@ -1146,3 +1146,81 @@ export const generateInvoiceNumber = async (): Promise<string> => {
 
     return `INV${String(lastNumber + 1).padStart(6, "0")}`;
 };
+
+export const selectPaymentMethod = async (
+    orderId: number,
+    body: any,
+    userId: number
+) => {
+
+    const {
+        payment_method,
+        paymentNotes,
+    } = body;
+
+    if (!payment_method) {
+        throw new Error("Payment method is required.");
+    }
+
+    const user = await userRepository.findOne({
+        where: {
+            userId,
+        },
+        relations: [
+            "subClient",
+        ],
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    if (!user.subClient) {
+        throw new Error("Only dealer can select payment method.");
+    }
+
+    const order = await orderRepository.findOne({
+        where: {
+            orderId,
+            subClient: {
+                subClientId: user.subClient.subClientId,
+            },
+        },
+        relations: [
+            "client",
+            "subClient",
+        ],
+    });
+
+    if (!order) {
+        throw new Error("Order not found.");
+    }
+
+    if (order.status !== OrderStatus.APPROVED) {
+        throw new Error(
+            "Payment can only be selected after order approval."
+        );
+    }
+
+    if (order.payment_method) {
+        throw new Error(
+            "Payment method has already been selected."
+        );
+    }
+
+    order.payment_method = payment_method;
+    order.paymentNotes = paymentNotes ?? null;
+    order.updated_by = user.userId;
+
+    await orderRepository.save(order);
+
+    await createActivity(
+        `Payment method "${payment_method}" selected for Order "${order.orderNumber}".`,
+        ActivityType.ORDER_UPDATED,
+        order.client.clientId,
+        order.subClient.subClientId,
+        user.userId
+    );
+
+    return order;
+};
