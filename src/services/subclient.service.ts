@@ -166,73 +166,91 @@ export const getSubClients = async (
     limit: number = 10,
     subClientId?: number
 ) => {
-    const whereCondition: any = {
-        client: {
-            clientId,
-        },
-        isActive: true,
-    };
+    try {
+        const whereCondition: any = {
+            client: {
+                clientId: clientId,
+            },
+            isActive: true,
+        };
 
-    if (subClientId) {
-        whereCondition.subClientId = subClientId;
-    }
+        // If a specific subClientId is provided,
+        // make sure it belongs to the logged-in client
+        if (subClientId !== undefined) {
+            whereCondition.subClientId = subClientId;
+        }
 
-    const [subClients, total] = await subClientRepository.findAndCount({
-        where: whereCondition,
-        relations: [
-            "client",
-            "createdBy",
-            "users",
-        ],
-        order: {
-            createdAt: "DESC",
-        },
-        skip: offset,
-        take: limit,
-    });
+        const [subClients, total] =
+            await subClientRepository.findAndCount({
+                where: whereCondition,
 
-    return {
-        total,
-        offset,
-        limit,
-        data: subClients.map((subClient) => ({
-            subClientId: subClient.subClientId,
-            companyName: subClient.companyName,
-            contactPerson: subClient.contactPerson,
-            email: subClient.email,
-            mobile: subClient.mobile,
-            gstNumber: subClient.gstNumber,
-            taxType: subClient.taxType,
-            taxRate: subClient.taxRate,
-            panNumber: subClient.panNumber,
-            website: subClient.website,
-            address: subClient.address,
-            city: subClient.city,
-            state: subClient.state,
-            country: subClient.country,
-            postalCode: subClient.postalCode,
-            creditLimit: subClient.creditLimit,
-            availableCredit: subClient.availableCredit,
-            createdAt: subClient.createdAt,
-            createdBy: subClient.createdBy
-                ? {
-                    userId: subClient.createdBy.userId,
-                    firstName: subClient.createdBy.firstName,
-                    lastName: subClient.createdBy.lastName,
-                }
-                : null,
-            subClientAdmin:
-                subClient.users.length > 0
+                relations: [
+                    "client",
+                    "createdBy",
+                    "users",
+                ],
+
+                order: {
+                    createdAt: "DESC",
+                },
+
+                skip: offset,
+                take: limit,
+            });
+
+        return {
+            total,
+            offset,
+            limit,
+
+            data: subClients.map((subClient) => ({
+                subClientId: subClient.subClientId,
+                companyName: subClient.companyName,
+                contactPerson: subClient.contactPerson,
+                email: subClient.email,
+                mobile: subClient.mobile,
+
+                gstNumber: subClient.gstNumber,
+                taxType: subClient.taxType,
+                taxRate: subClient.taxRate,
+                panNumber: subClient.panNumber,
+
+                website: subClient.website,
+                address: subClient.address,
+                city: subClient.city,
+                state: subClient.state,
+                country: subClient.country,
+                postalCode: subClient.postalCode,
+
+                creditLimit: subClient.creditLimit,
+                availableCredit: subClient.availableCredit,
+
+                createdAt: subClient.createdAt,
+
+                createdBy: subClient.createdBy
                     ? {
-                        userId: subClient.users[0].userId,
-                        firstName: subClient.users[0].firstName,
-                        lastName: subClient.users[0].lastName,
-                        email: subClient.users[0].email,
-                        mobile: subClient.users[0].mobile,
+                        userId: subClient.createdBy.userId,
+                        firstName: subClient.createdBy.firstName,
+                        lastName: subClient.createdBy.lastName,
                     }
                     : null,
-        })),
-    };
+
+                subClientAdmin:
+                    subClient.users && subClient.users.length > 0
+                        ? {
+                            userId: subClient.users[0].userId,
+                            firstName: subClient.users[0].firstName,
+                            lastName: subClient.users[0].lastName,
+                            email: subClient.users[0].email,
+                            mobile: subClient.users[0].mobile,
+                        }
+                        : null,
+            })),
+        };
+    } catch (error) {
+        console.error("Get Sub Clients Service Error:", error);
+        throw error;
+    }
 };
 
 export const getSubClientById = async (

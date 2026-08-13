@@ -34,9 +34,12 @@ export const getSubClients = async (
     res: Response,
 ) => {
     try {
+        // Get clientId from JWT token
         const clientId = req.user!.clientId;
+
         const offset = Number(req.query.offset) || 0;
         const limit = Number(req.query.limit) || 10;
+
         const subClientId = req.query.subClientId
             ? Number(req.query.subClientId)
             : undefined;
@@ -58,6 +61,8 @@ export const getSubClients = async (
         });
 
     } catch (error: any) {
+        console.error("Get Sub Clients Error:", error);
+
         return res.status(500).json({
             status: false,
             message: error.message || "Internal server error",
