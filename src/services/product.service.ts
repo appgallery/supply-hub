@@ -409,7 +409,15 @@ export const getProducts = async (
     // Search
     if (search) {
         query.andWhere(
-            "category.categoryName ILIKE :search",
+            `(
+            category.categoryName ILIKE :search
+            OR product.productName ILIKE :search
+            OR product.productCode ILIKE :search
+            OR variants.sku ILIKE :search
+            OR variants.name ILIKE :search
+            OR color.name ILIKE :search
+            OR size.name ILIKE :search
+        )`,
             {
                 search: `%${search}%`,
             }
