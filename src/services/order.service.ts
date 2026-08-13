@@ -644,6 +644,7 @@ export const getClientDashboard = async (
             client: {
                 clientId,
             },
+            isActive: true,
         },
     });
 
