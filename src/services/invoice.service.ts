@@ -23,19 +23,27 @@ export const getInvoices = async (
     const where: any = {};
 
     if (roleName === Role.CLIENT) {
+        if (!user.client) {
+            throw new Error("Client not found for this user.");
+        }
+
         where.order = {
             client: {
                 clientId: user.client.clientId,
             },
         };
-    }
+    } else if (roleName === Role.SUB_CLIENT) {
+        if (!user.subClient) {
+            throw new Error("Dealer not found for this user.");
+        }
 
-    if (roleName === Role.SUB_CLIENT) {
         where.order = {
             subClient: {
                 subClientId: user.subClient.subClientId,
             },
         };
+    } else {
+        throw new Error("You are not authorized to access invoices.");
     }
 
     if (invoiceId) {
