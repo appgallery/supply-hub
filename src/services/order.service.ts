@@ -777,7 +777,9 @@ export const getClientDashboard = async (
 };
 
 export const getAdminDashboard = async (
-    userId: number
+    userId: number,
+    month?: number,
+    year?: number
 ) => {
 
     const user = await userRepository.findOne({
@@ -798,22 +800,53 @@ export const getAdminDashboard = async (
     }
     const now = new Date();
 
+    const selectedYear = year ?? now.getFullYear();
+    const selectedMonth = month ?? (now.getMonth() + 1);
+
+    // Selected month
     const startCurrentMonth = new Date(
-        now.getFullYear(),
-        now.getMonth(),
+        selectedYear,
+        selectedMonth - 1,
+        1,
+        0,
+        0,
+        0
+    );
+
+    const endCurrentMonth = new Date(
+        selectedYear,
+        selectedMonth,
+        0,
+        23,
+        59,
+        59,
+        999
+    );
+
+    // Previous month
+    const previousMonthDate = new Date(
+        selectedYear,
+        selectedMonth - 2,
         1
     );
 
     const startLastMonth = new Date(
-        now.getFullYear(),
-        now.getMonth() - 1,
-        1
+        previousMonthDate.getFullYear(),
+        previousMonthDate.getMonth(),
+        1,
+        0,
+        0,
+        0
     );
 
     const endLastMonth = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        0
+        previousMonthDate.getFullYear(),
+        previousMonthDate.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
     );
 
     const calculatePercentage = (
@@ -844,7 +877,7 @@ export const getAdminDashboard = async (
         where: {
             createdAt: Between(
                 startCurrentMonth,
-                now
+                endCurrentMonth
             )
         }
     });
@@ -862,7 +895,7 @@ export const getAdminDashboard = async (
         where: {
             created_at: Between(
                 startCurrentMonth,
-                now
+                endCurrentMonth
             )
         }
     });
@@ -880,7 +913,7 @@ export const getAdminDashboard = async (
         where: {
             created_at: Between(
                 startCurrentMonth,
-                now
+                endCurrentMonth
             )
         }
     });
@@ -898,6 +931,13 @@ export const getAdminDashboard = async (
     const revenue = await orderRepository
         .createQueryBuilder("order")
         .select("COALESCE(SUM(order.totalAmount),0)", "revenue")
+        .where(
+            "order.created_at BETWEEN :start AND :end",
+            {
+                start: startCurrentMonth,
+                end: endCurrentMonth,
+            }
+        )
         .getRawOne();
 
     // Top Clients by Revenue
@@ -907,11 +947,72 @@ export const getAdminDashboard = async (
         .select("client.clientId", "clientId")
         .addSelect("client.companyName", "companyName")
         .addSelect("SUM(order.totalAmount)", "revenue")
+        .where(
+            "order.created_at BETWEEN :start AND :end",
+            {
+                start: startCurrentMonth,
+                end: endCurrentMonth,
+            }
+        )
         .groupBy("client.clientId")
         .addGroupBy("client.companyName")
         .orderBy("SUM(order.totalAmount)", "DESC")
         .limit(10)
         .getRawMany();
+
+    // Revenue Overview (Weekly)
+    const revenueOverview = [];
+
+    const daysInMonth = endCurrentMonth.getDate();
+
+    const weekRanges = [
+        { label: "Week 1", start: 1, end: 7 },
+        { label: "Week 2", start: 8, end: 14 },
+        { label: "Week 3", start: 15, end: 21 },
+        { label: "Week 4", start: 22, end: daysInMonth },
+    ];
+
+    for (const week of weekRanges) {
+
+        const startDate = new Date(
+            selectedYear,
+            selectedMonth - 1,
+            week.start,
+            0,
+            0,
+            0
+        );
+
+        const endDate = new Date(
+            selectedYear,
+            selectedMonth - 1,
+            week.end,
+            23,
+            59,
+            59,
+            999
+        );
+
+        const revenue = await orderRepository
+            .createQueryBuilder("order")
+            .select(
+                "COALESCE(SUM(order.totalAmount),0)",
+                "revenue"
+            )
+            .where(
+                "order.created_at BETWEEN :start AND :end",
+                {
+                    start: startDate,
+                    end: endDate,
+                }
+            )
+            .getRawOne();
+
+        revenueOverview.push({
+            week: week.label,
+            revenue: Number(revenue.revenue),
+        });
+    }
 
     // Recent Clients
     const recentClients = await clientRepository.find({
@@ -981,7 +1082,7 @@ export const getAdminDashboard = async (
             totalRevenue: Number(revenue.revenue),
         },
 
-        revenueOverview: [],
+        revenueOverview,
         topClients,
         recentClients,
         recentOrders,
