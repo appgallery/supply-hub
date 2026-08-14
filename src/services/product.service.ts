@@ -331,10 +331,11 @@ export const getProducts = async (
         | "price_high"
         | "most_sold" = "productId",
     sortOrder: "ASC" | "DESC" = "DESC",
-    offset: number = 0,
-    limit: number = 10
+    offset = 0,
+    limit = 10
 ) => {
     console.log("Service started");
+
     const user = await userRepository.findOne({
         where: { userId },
         relations: ["client", "role"],
@@ -343,11 +344,143 @@ export const getProducts = async (
     if (!user) {
         throw new Error("User not found.");
     }
-    console.log("User fetched");
-    const query = productRepository
+
+    /*
+     * ---------------------------------------------------------
+     * STEP 1: Find product IDs for this page
+     * ---------------------------------------------------------
+     */
+
+    const idQuery = productRepository
         .createQueryBuilder("product")
-        .leftJoinAndSelect("product.category", "category")
-        .leftJoinAndSelect("category.client", "client")
+        .leftJoin("product.category", "category")
+        .leftJoin("category.client", "client")
+        .leftJoin("product.variants", "variants")
+        .leftJoin("variants.color", "color")
+        .leftJoin("variants.size", "size")
+        .where("product.is_active = :active", {
+            active: true,
+        });
+
+    // Client filter
+    if (user.role.name !== Role.SUPER_ADMIN) {
+        idQuery.andWhere(
+            "client.clientId = :clientId",
+            {
+                clientId: user.client.clientId,
+            }
+        );
+    }
+
+    // Category filter
+    if (categoryId) {
+        idQuery.andWhere(
+            "category.categoryId = :categoryId",
+            {
+                categoryId,
+            }
+        );
+    }
+
+    // Search
+    if (search?.trim()) {
+        idQuery.andWhere(
+            `(
+                category.categoryName ILIKE :search
+                OR product.productName ILIKE :search
+                OR product.productCode ILIKE :search
+                OR variants.sku ILIKE :search
+                OR variants.name ILIKE :search
+                OR color.name ILIKE :search
+                OR size.name ILIKE :search
+            )`,
+            {
+                search: `%${search.trim()}%`,
+            }
+        );
+    }
+
+    /*
+     * DISTINCT is important because variants can produce
+     * multiple rows for the same product.
+     */
+    idQuery.select("product.productId").distinct(true);
+
+    // Sorting
+    switch (sortBy) {
+        case "name":
+            idQuery.orderBy(
+                "product.productName",
+                sortOrder
+            );
+            break;
+
+        case "createdAt":
+            idQuery.orderBy(
+                "product.created_at",
+                sortOrder
+            );
+            break;
+
+        case "price_low":
+            idQuery.orderBy(
+                "product.base_price",
+                "ASC"
+            );
+            break;
+
+        case "price_high":
+            idQuery.orderBy(
+                "product.base_price",
+                "DESC"
+            );
+            break;
+
+        default:
+            idQuery.orderBy(
+                "product.productId",
+                sortOrder
+            );
+    }
+
+    const total = await idQuery.getCount();
+
+    const rows = await idQuery
+        .skip(offset)
+        .take(limit)
+        .getRawMany();
+
+    const productIds = rows.map(
+        row => row.product_productId ?? row.productId
+    );
+
+    if (productIds.length === 0) {
+        return {
+            products: [],
+            total,
+            offset,
+            limit,
+        };
+    }
+
+    console.log("Product IDs:", productIds);
+
+    /*
+     * ---------------------------------------------------------
+     * STEP 2: Load complete product graph
+     * ---------------------------------------------------------
+     */
+
+    const products = await productRepository
+        .createQueryBuilder("product")
+        .leftJoinAndSelect(
+            "product.category",
+            "category"
+        )
+        .leftJoinAndSelect(
+            "category.client",
+            "client"
+        )
 
         // Product details
         .leftJoinAndSelect(
@@ -391,93 +524,31 @@ export const getProducts = async (
             "media"
         )
 
-        .where("product.is_active = :active", {
-            active: true,
-        });
-
-    // Client wise products
-    if (user.role.name !== Role.SUPER_ADMIN) {
-        query.andWhere(
-            "client.clientId = :clientId",
-            {
-                clientId: user.client.clientId,
-            }
-        );
-    }
-
-    // Category filter
-    if (categoryId) {
-        query.andWhere(
-            "category.categoryId = :categoryId",
-            {
-                categoryId,
-            }
-        );
-    }
-
-    // Search
-    if (search) {
-        query.andWhere(
-            `(
-            category.categoryName ILIKE :search
-            OR product.productName ILIKE :search
-            OR product.productCode ILIKE :search
-            OR color.name ILIKE :search
-            OR size.name ILIKE :search
-        )`,
-            {
-                search: `%${search}%`,
-            }
-        );
-    }
-    // Sorting
-    switch (sortBy) {
-        case "name":
-            query.orderBy(
-                "product.productName",
-                sortOrder
-            );
-            break;
-
-        case "createdAt":
-            query.orderBy(
-                "product.created_at",
-                sortOrder
-            );
-            break;
-
-        case "price_low":
-            query.orderBy(
-                "product.base_price",
-                "ASC"
-            );
-            break;
-
-        case "price_high":
-            query.orderBy(
-                "product.base_price",
-                "DESC"
-            );
-            break;
-
-        default:
-            query.orderBy(
-                "product.productId",
-                sortOrder
-            );
-    }
-    console.log(query.getSql());
-    console.log("Query built");
-    const products = await query
-        .skip(offset)
-        .take(limit)
+        .where("product.productId IN (:...productIds)", {
+            productIds,
+        })
         .getMany();
 
+    /*
+     * IN() does not guarantee the same order as the first query.
+     * Restore the requested sort/page order.
+     */
+    const productMap = new Map(
+        products.map(product => [
+            product.productId,
+            product,
+        ])
+    );
+
+    const orderedProducts = productIds
+        .map(id => productMap.get(id))
+        .filter(Boolean);
+
     console.log("Query executed");
-    console.log("Sending response...");
+
     return {
-        products,
-        total: products.length,
+        products: orderedProducts,
+        total,
         offset,
         limit,
     };
