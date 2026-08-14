@@ -2021,13 +2021,14 @@ export const updateProduct = async (
     });
 };
 
-export const deleteProduct = async (
+export const toggleProductStatus = async (
     productId: number,
-    userId: number
+    userId: number,
+    roleName: string
 ) => {
     const user = await userRepository.findOne({
         where: { userId },
-        relations: ["client", "role"],
+        relations: ["client"],
     });
 
     if (!user) {
@@ -2035,15 +2036,15 @@ export const deleteProduct = async (
     }
 
     if (
-        user.role.name !== Role.SUPER_ADMIN &&
-        user.role.name !== Role.CLIENT
+        roleName !== Role.SUPER_ADMIN &&
+        roleName !== Role.CLIENT
     ) {
         throw new Error("You are not authorized.");
     }
 
     let product;
 
-    if (user.role.name === Role.SUPER_ADMIN) {
+    if (roleName === Role.SUPER_ADMIN) {
         product = await productRepository.findOne({
             where: { productId },
         });
@@ -2055,7 +2056,7 @@ export const deleteProduct = async (
                     client: {
                         clientId: user.client.clientId,
                     },
-                }
+                },
             },
             relations: ["category"],
         });
@@ -2065,13 +2066,16 @@ export const deleteProduct = async (
         throw new Error("Product not found.");
     }
 
-    product.is_active = false;
+    // Toggle status
+    product.is_active = !product.is_active;
     product.updated_by = user.userId;
 
     await productRepository.save(product);
 
     return {
-        status: true,
-        message: "Product deleted successfully.",
+        message: product.is_active
+            ? "Product activated successfully."
+            : "Product deactivated successfully.",
+        is_active: product.is_active,
     };
 };

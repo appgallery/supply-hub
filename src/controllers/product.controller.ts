@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { createProduct, deleteProduct, getDealerProducts, getProductById, getProducts, updateProduct } from "../services/product.service"
+import { createProduct, getDealerProducts, getProductById, getProducts, toggleProductStatus, updateProduct } from "../services/product.service"
+import { AuthRequest } from "../middleware/auth.middleware";
 
 export const createProductController = async (
     req: Request, res: Response
@@ -117,7 +118,7 @@ export const getDealerProductsController = async (
 
         return res.status(200).json({
             status: true,
-            message:"Dealer products fetched successfully...",
+            message: "Dealer products fetched successfully...",
             total: response.total,
             offset: response.offset,
             limit: response.limit,
@@ -151,12 +152,20 @@ export const updateProductController = async (
     }
 }
 
-export const deleteProductController = async (
-    req: Request, res: Response
+export const toggleProductStatusController = async (
+    req: AuthRequest,
+    res: Response
 ) => {
     try {
         const userId = (req as any).user.userId;
-        const response = await deleteProduct(Number(req.query.productId), userId);
+        const roleName = req.user.roleName;
+        const productId = Number(req.query.productId);
+
+        const response = await toggleProductStatus(
+            productId,
+            userId,
+            roleName
+        );
 
         return res.status(200).json({
             status: true,
@@ -168,4 +177,4 @@ export const deleteProductController = async (
             message: error.message,
         });
     }
-}
+};
