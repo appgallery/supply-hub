@@ -1134,11 +1134,10 @@ export const getProductById = async (
         throw new Error("User not found.");
     }
 
-    // Get only product + category + client
+    // Get product
     const product = await productRepository.findOne({
         where: {
             productId,
-            is_active: true,
         },
         relations: [
             "category",
@@ -1154,6 +1153,14 @@ export const getProductById = async (
     if (
         user.role.name !== Role.SUPER_ADMIN &&
         product.category.client.clientId !== user.client.clientId
+    ) {
+        throw new Error("Product not found.");
+    }
+
+    // SubClient can only view active products
+    if (
+        user.role.name === Role.SUB_CLIENT &&
+        !product.is_active
     ) {
         throw new Error("Product not found.");
     }
@@ -1187,7 +1194,7 @@ export const getProductById = async (
                 product: {
                     productId,
                 },
-                variant: IsNull(), // Product level tiers only
+                variant: IsNull(),
             },
         }),
 
