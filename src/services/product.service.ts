@@ -1,4 +1,4 @@
-import { EntityManager, MoreThanOrEqual } from "typeorm";
+import { EntityManager, IsNull, MoreThanOrEqual } from "typeorm";
 import { Color } from "../entities/Color";
 import { Product } from "../entities/Product";
 import { ProductMedia } from "../entities/ProductMedia";
@@ -680,18 +680,18 @@ export const getProducts = async (
 
         variantIds.length > 0
             ? variantImageRepository
-                  .createQueryBuilder("image")
-                  .leftJoin(
-                      "image.variant",
-                      "variant"
-                  )
-                  .where(
-                      "variant.variantId IN (:...variantIds)",
-                      {
-                          variantIds,
-                      }
-                  )
-                  .getMany()
+                .createQueryBuilder("image")
+                .leftJoinAndSelect(
+                    "image.variant",
+                    "variant"
+                )
+                .where(
+                    "variant.variantId IN (:...variantIds)",
+                    {
+                        variantIds,
+                    }
+                )
+                .getMany()
             : [],
 
         // -----------------------------------------------------
@@ -700,20 +700,20 @@ export const getProducts = async (
 
         variantIds.length > 0
             ? variantTechnicalDetailsRepository
-                  .createQueryBuilder(
-                      "technicalDetails"
-                  )
-                  .leftJoin(
-                      "technicalDetails.variant",
-                      "variant"
-                  )
-                  .where(
-                      "variant.variantId IN (:...variantIds)",
-                      {
-                          variantIds,
-                      }
-                  )
-                  .getMany()
+                .createQueryBuilder(
+                    "technicalDetails"
+                )
+                .leftJoinAndSelect(
+                    "technicalDetails.variant",
+                    "variant"
+                )
+                .where(
+                    "variant.variantId IN (:...variantIds)",
+                    {
+                        variantIds,
+                    }
+                )
+                .getMany()
             : [],
 
         // -----------------------------------------------------
@@ -761,7 +761,7 @@ export const getProducts = async (
 
         productMediaRepository
             .createQueryBuilder("media")
-            .leftJoin(
+            .leftJoinAndSelect(
                 "media.product",
                 "product"
             )
@@ -781,7 +781,7 @@ export const getProducts = async (
             .createQueryBuilder(
                 "technicalDetails"
             )
-            .leftJoin(
+            .leftJoinAndSelect(
                 "technicalDetails.product",
                 "product"
             )
@@ -1124,7 +1124,6 @@ export const getProductById = async (
     productId: number,
     userId: number
 ) => {
-
     const user = await userRepository.findOne({
         where: { userId },
         relations: ["client", "role"],
@@ -1134,104 +1133,86 @@ export const getProductById = async (
         throw new Error("User not found.");
     }
 
-
-    const query = productRepository
-        .createQueryBuilder("product")
-
-        // Category + Client
-        .leftJoinAndSelect(
-            "product.category",
-            "category"
-        )
-        .leftJoinAndSelect(
+    // Get only product + category + client
+    const product = await productRepository.findOne({
+        where: {
+            productId,
+            is_active: true,
+        },
+        relations: [
+            "category",
             "category.client",
-            "client"
-        )
-
-
-        // Product Details
-        .leftJoinAndSelect(
-            "product.technicalDetails",
-            "productTechnicalDetails"
-        )
-        .leftJoinAndSelect(
-            "product.wholesalePriceTiers",
-            "productWholesalePriceTiers"
-        )
-
-
-        // Variants
-        .leftJoinAndSelect(
-            "product.variants",
-            "variants"
-        )
-
-        .leftJoinAndSelect(
-            "variants.color",
-            "color"
-        )
-
-        .leftJoinAndSelect(
-            "variants.size",
-            "size"
-        )
-
-        .leftJoinAndSelect(
-            "variants.variantImages",
-            "variantImages"
-        )
-
-        .leftJoinAndSelect(
-            "variants.technicalDetails",
-            "variantTechnicalDetails"
-        )
-
-        .leftJoinAndSelect(
-            "variants.wholesalePriceTiers",
-            "variantWholesalePriceTiers"
-        )
-
-
-        // Product Images
-        .leftJoinAndSelect(
-            "product.media",
-            "media"
-        )
-
-        .where(
-            "product.productId = :productId",
-            {
-                productId
-            }
-        )
-
-        .andWhere(
-            "product.is_active = :active",
-            {
-                active: true
-            }
-        );
-
-
-    // Client restriction
-    if (user.role.name !== Role.SUPER_ADMIN) {
-
-        query.andWhere(
-            "client.clientId = :clientId",
-            {
-                clientId: user.client.clientId,
-            }
-        );
-
-    }
-
-
-    const product = await query.getOne();
-
+        ],
+    });
 
     if (!product) {
         throw new Error("Product not found.");
     }
+
+    // Client restriction
+    if (
+        user.role.name !== Role.SUPER_ADMIN &&
+        product.category.client.clientId !== user.client.clientId
+    ) {
+        throw new Error("Product not found.");
+    }
+
+    // Load remaining relations in parallel
+    const [
+        media,
+        technicalDetails,
+        wholesalePriceTiers,
+        variants,
+    ] = await Promise.all([
+
+        productMediaRepository.find({
+            where: {
+                product: {
+                    productId,
+                },
+            },
+        }),
+
+        productTechnicalDetailRepository.find({
+            where: {
+                product: {
+                    productId,
+                },
+            },
+        }),
+
+        wholesalePriceTierRepository.find({
+            where: {
+                product: {
+                    productId,
+                },
+                variant: IsNull(), // Product level tiers only
+            },
+        }),
+
+        variantRepository.find({
+            where: {
+                product: {
+                    productId,
+                },
+            },
+            relations: [
+                "color",
+                "size",
+                "variantImages",
+                "technicalDetails",
+                "wholesalePriceTiers",
+            ],
+            order: {
+                variantId: "ASC",
+            },
+        }),
+    ]);
+
+    product.media = media;
+    product.technicalDetails = technicalDetails;
+    product.wholesalePriceTiers = wholesalePriceTiers;
+    product.variants = variants;
 
     return product;
 };
