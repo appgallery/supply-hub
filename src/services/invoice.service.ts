@@ -21,9 +21,6 @@ export const getInvoices = async (
     }
 
     const where: any = {};
-    console.log("JWT roleName:", roleName);
-    console.log("Role.CLIENT:", Role.CLIENT);
-    console.log("User:", user);
 
     if (roleName === Role.CLIENT) {
         if (!user.client) {
