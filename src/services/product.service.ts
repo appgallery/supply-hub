@@ -22,6 +22,11 @@ const userRepository = AppDataSource.getRepository(User);
 const clientRepository = AppDataSource.getRepository(Client);
 const categoryRepository = AppDataSource.getRepository(Category);
 const productTechnicalDetailRepository = AppDataSource.getRepository(ProductTechnicalDetail);
+const variantTechnicalDetailsRepository = AppDataSource.getRepository(VariantTechnicalDetail);
+const variantRepository = AppDataSource.getRepository(Variant);
+const variantImageRepository = AppDataSource.getRepository(VariantImage);
+const wholesalePriceTierRepository = AppDataSource.getRepository(WholesalePriceTier);
+const productMediaRepository = AppDataSource.getRepository(ProductMedia);
 
 export const createProduct = async (
     body: any,
@@ -334,17 +339,21 @@ export const getProducts = async (
     offset: number = 0,
     limit: number = 10
 ) => {
-    console.log("Service started");
+    console.log("========== GET PRODUCTS START ==========");
 
-    const safeOffset = Math.max(0, Number(offset) || 0);
+    const safeOffset = Math.max(
+        0,
+        Number(offset) || 0
+    );
+
     const safeLimit = Math.min(
         Math.max(1, Number(limit) || 10),
         100
     );
 
-    // ---------------------------------------------------------
-    // USER
-    // ---------------------------------------------------------
+    // =========================================================
+    // 1. GET USER
+    // =========================================================
 
     console.time("USER_QUERY");
 
@@ -359,16 +368,18 @@ export const getProducts = async (
         throw new Error("User not found.");
     }
 
-    // ---------------------------------------------------------
-    // BASE QUERY
+    // =========================================================
+    // 2. BASE PRODUCT QUERY
     //
     // IMPORTANT:
     // Do NOT join variants/media/technical details here.
-    // ---------------------------------------------------------
+    // Only category/client are joined because they are used
+    // for filtering.
+    // =========================================================
 
-    const query = productRepository
+    const productQuery = productRepository
         .createQueryBuilder("product")
-        .leftJoinAndSelect(
+        .leftJoin(
             "product.category",
             "category"
         )
@@ -383,25 +394,26 @@ export const getProducts = async (
             }
         );
 
-    // ---------------------------------------------------------
+    // =========================================================
     // CLIENT FILTER
-    // ---------------------------------------------------------
+    // =========================================================
 
     if (user.role.name !== Role.SUPER_ADMIN) {
-        query.andWhere(
+        productQuery.andWhere(
             "client.clientId = :clientId",
             {
-                clientId: user.client.clientId,
+                clientId:
+                    user.client.clientId,
             }
         );
     }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // CATEGORY FILTER
-    // ---------------------------------------------------------
+    // =========================================================
 
     if (categoryId) {
-        query.andWhere(
+        productQuery.andWhere(
             "category.categoryId = :categoryId",
             {
                 categoryId,
@@ -409,17 +421,21 @@ export const getProducts = async (
         );
     }
 
-    // ---------------------------------------------------------
+    // =========================================================
     // SEARCH
-    // ---------------------------------------------------------
+    // =========================================================
 
     if (search?.trim()) {
-        const searchValue = `%${search.trim()}%`;
+        const searchValue =
+            `%${search.trim()}%`;
 
-        query.andWhere(
-            `(
+        productQuery.andWhere(
+            `
+            (
                 category.categoryName ILIKE :search
+
                 OR product.productName ILIKE :search
+
                 OR product.productCode ILIKE :search
 
                 OR EXISTS (
@@ -431,22 +447,39 @@ export const getProducts = async (
                         OR variantSearch.name ILIKE :search
                     )
                 )
-            )`,
+
+                OR EXISTS (
+                    SELECT 1
+                    FROM variants variantColorSearch
+                    INNER JOIN color colorSearch
+                        ON colorSearch.colorId =
+                           variantColorSearch.colorId
+                    WHERE variantColorSearch.productId =
+                          product.productId
+                    AND colorSearch.name ILIKE :search
+                )
+
+                OR EXISTS (
+                    SELECT 1
+                    FROM variants variantSizeSearch
+                    INNER JOIN size sizeSearch
+                        ON sizeSearch.sizeId =
+                           variantSizeSearch.sizeId
+                    WHERE variantSizeSearch.productId =
+                          product.productId
+                    AND sizeSearch.name ILIKE :search
+                )
+            )
+            `,
             {
                 search: searchValue,
             }
         );
     }
 
-    // ---------------------------------------------------------
-    // DISTINCT
-    // ---------------------------------------------------------
-
-    query.distinct(true);
-
-    // ---------------------------------------------------------
+    // =========================================================
     // SORT
-    // ---------------------------------------------------------
+    // =========================================================
 
     const direction: "ASC" | "DESC" =
         sortOrder === "ASC"
@@ -455,37 +488,41 @@ export const getProducts = async (
 
     switch (sortBy) {
         case "name":
-            query.orderBy(
+            productQuery.orderBy(
                 "product.productName",
                 direction
             );
             break;
 
         case "createdAt":
-            query.orderBy(
+            productQuery.orderBy(
                 "product.created_at",
                 direction
             );
             break;
 
         case "price_low":
-            query.orderBy(
+            productQuery.orderBy(
                 "product.base_price",
                 "ASC"
             );
             break;
 
         case "price_high":
-            query.orderBy(
+            productQuery.orderBy(
                 "product.base_price",
                 "DESC"
             );
             break;
 
         case "most_sold":
-            // Keep existing behavior until the sales relation
-            // is provided.
-            query.orderBy(
+            /*
+             * Keep your existing behavior for now.
+             *
+             * We need your order/order-item entity to implement
+             * the real most_sold calculation.
+             */
+            productQuery.orderBy(
                 "product.productId",
                 direction
             );
@@ -493,50 +530,590 @@ export const getProducts = async (
 
         case "productId":
         default:
-            query.orderBy(
+            productQuery.orderBy(
                 "product.productId",
                 direction
             );
             break;
     }
 
-    // ---------------------------------------------------------
-    // TOTAL
-    // ---------------------------------------------------------
+    // =========================================================
+    // 3. TOTAL COUNT
+    // =========================================================
 
     console.time("COUNT_QUERY");
 
-    const total = await query.getCount();
+    const total =
+        await productQuery.getCount();
 
     console.timeEnd("COUNT_QUERY");
 
-    // ---------------------------------------------------------
-    // PRODUCTS
-    // ---------------------------------------------------------
+    // =========================================================
+    // 4. GET PRODUCT IDS FOR CURRENT PAGE
+    //
+    // This query only returns IDs.
+    // No huge relations.
+    // =========================================================
 
-    console.time("PRODUCT_QUERY");
+    console.time("PRODUCT_ID_QUERY");
 
-    const products = await query
-        .skip(safeOffset)
-        .take(safeLimit)
-        .getMany();
+    const idRows =
+        await productQuery
+            .select(
+                "product.productId",
+                "productId"
+            )
+            .skip(safeOffset)
+            .take(safeLimit)
+            .getRawMany();
 
-    console.timeEnd("PRODUCT_QUERY");
+    console.timeEnd("PRODUCT_ID_QUERY");
+
+    const productIds =
+        idRows.map(row =>
+            Number(row.productId)
+        );
 
     console.log(
-        `Products returned: ${products.length}`
+        "Product IDs:",
+        productIds
+    );
+
+    if (productIds.length === 0) {
+        console.log(
+            "No products found."
+        );
+
+        return {
+            products: [],
+            total,
+            offset: safeOffset,
+            limit: safeLimit,
+        };
+    }
+
+    // =========================================================
+    // 5. GET PRODUCTS + CATEGORY
+    // =========================================================
+
+    console.time("PRODUCT_BASE_QUERY");
+
+    const products =
+        await productRepository
+            .createQueryBuilder("product")
+            .leftJoinAndSelect(
+                "product.category",
+                "category"
+            )
+            .where(
+                "product.productId IN (:...productIds)",
+                {
+                    productIds,
+                }
+            )
+            .getMany();
+
+    console.timeEnd("PRODUCT_BASE_QUERY");
+
+    // =========================================================
+    // 6. GET VARIANTS
+    //
+    // Uses variant.product instead of variant.productId.
+    // =========================================================
+
+    console.time("VARIANTS_QUERY");
+
+    const variants =
+        await variantRepository
+            .createQueryBuilder("variant")
+            .leftJoinAndSelect(
+                "variant.product",
+                "product"
+            )
+            .leftJoinAndSelect(
+                "variant.color",
+                "color"
+            )
+            .leftJoinAndSelect(
+                "variant.size",
+                "size"
+            )
+            .where(
+                "product.productId IN (:...productIds)",
+                {
+                    productIds,
+                }
+            )
+            .getMany();
+
+    console.timeEnd("VARIANTS_QUERY");
+
+    const variantIds =
+        variants.map(
+            variant =>
+                variant.variantId
+        );
+
+    console.log(
+        "Variant count:",
+        variants.length
+    );
+
+    // =========================================================
+    // 7. LOAD ALL CHILD RELATIONS IN PARALLEL
+    // =========================================================
+
+    console.time(
+        "ALL_RELATIONS_QUERY"
+    );
+
+    const [
+        variantImages,
+        variantTechnicalDetails,
+        wholesalePriceTiers,
+        productMedia,
+        productTechnicalDetails,
+    ] = await Promise.all([
+        // -----------------------------------------------------
+        // VARIANT IMAGES
+        // -----------------------------------------------------
+
+        variantIds.length > 0
+            ? variantImageRepository
+                  .createQueryBuilder("image")
+                  .leftJoin(
+                      "image.variant",
+                      "variant"
+                  )
+                  .where(
+                      "variant.variantId IN (:...variantIds)",
+                      {
+                          variantIds,
+                      }
+                  )
+                  .getMany()
+            : [],
+
+        // -----------------------------------------------------
+        // VARIANT TECHNICAL DETAILS
+        // -----------------------------------------------------
+
+        variantIds.length > 0
+            ? variantTechnicalDetailsRepository
+                  .createQueryBuilder(
+                      "technicalDetails"
+                  )
+                  .leftJoin(
+                      "technicalDetails.variant",
+                      "variant"
+                  )
+                  .where(
+                      "variant.variantId IN (:...variantIds)",
+                      {
+                          variantIds,
+                      }
+                  )
+                  .getMany()
+            : [],
+
+        // -----------------------------------------------------
+        // WHOLESALE PRICE TIERS
+        //
+        // Your entity has:
+        //
+        // product: Product
+        // variant: Variant | null
+        //
+        // So fetch both types in ONE query.
+        // -----------------------------------------------------
+
+        wholesalePriceTierRepository
+            .createQueryBuilder("tier")
+            .leftJoinAndSelect(
+                "tier.product",
+                "tierProduct"
+            )
+            .leftJoinAndSelect(
+                "tier.variant",
+                "tierVariant"
+            )
+            .where(
+                `
+                tierProduct.productId IN (:...productIds)
+
+                OR
+
+                tierVariant.variantId IN (:...variantIds)
+                `,
+                {
+                    productIds,
+                    variantIds:
+                        variantIds.length > 0
+                            ? variantIds
+                            : [0],
+                }
+            )
+            .getMany(),
+
+        // -----------------------------------------------------
+        // PRODUCT MEDIA
+        // -----------------------------------------------------
+
+        productMediaRepository
+            .createQueryBuilder("media")
+            .leftJoin(
+                "media.product",
+                "product"
+            )
+            .where(
+                "product.productId IN (:...productIds)",
+                {
+                    productIds,
+                }
+            )
+            .getMany(),
+
+        // -----------------------------------------------------
+        // PRODUCT TECHNICAL DETAILS
+        // -----------------------------------------------------
+
+        productTechnicalDetailRepository
+            .createQueryBuilder(
+                "technicalDetails"
+            )
+            .leftJoin(
+                "technicalDetails.product",
+                "product"
+            )
+            .where(
+                "product.productId IN (:...productIds)",
+                {
+                    productIds,
+                }
+            )
+            .getMany(),
+    ]);
+
+    console.timeEnd(
+        "ALL_RELATIONS_QUERY"
+    );
+
+    // =========================================================
+    // 8. CREATE MAPS
+    // =========================================================
+
+    // ---------------------------------------------------------
+    // Variants by product
+    // ---------------------------------------------------------
+
+    const variantsByProduct =
+        new Map<number, Variant[]>();
+
+    for (const variant of variants) {
+        const productId =
+            variant.product?.productId;
+
+        if (!productId) {
+            continue;
+        }
+
+        if (
+            !variantsByProduct.has(
+                productId
+            )
+        ) {
+            variantsByProduct.set(
+                productId,
+                []
+            );
+        }
+
+        variantsByProduct
+            .get(productId)!
+            .push(variant);
+    }
+
+    // ---------------------------------------------------------
+    // Images by variant
+    // ---------------------------------------------------------
+
+    const imagesByVariant =
+        new Map<number, any[]>();
+
+    for (const image of variantImages) {
+        const variantId =
+            image.variant?.variantId ??
+            image.variantId;
+
+        if (!variantId) {
+            continue;
+        }
+
+        if (
+            !imagesByVariant.has(
+                variantId
+            )
+        ) {
+            imagesByVariant.set(
+                variantId,
+                []
+            );
+        }
+
+        imagesByVariant
+            .get(variantId)!
+            .push(image);
+    }
+
+    // ---------------------------------------------------------
+    // Variant technical details
+    // ---------------------------------------------------------
+
+    const variantTechnicalDetailsByVariant =
+        new Map<number, any[]>();
+
+    for (const detail of variantTechnicalDetails) {
+        const variantId =
+            detail.variant?.variantId ??
+            detail.variantId;
+
+        if (!variantId) {
+            continue;
+        }
+
+        if (
+            !variantTechnicalDetailsByVariant.has(
+                variantId
+            )
+        ) {
+            variantTechnicalDetailsByVariant.set(
+                variantId,
+                []
+            );
+        }
+
+        variantTechnicalDetailsByVariant
+            .get(variantId)!
+            .push(detail);
+    }
+
+    // ---------------------------------------------------------
+    // Product wholesale tiers
+    // ---------------------------------------------------------
+
+    const productWholesalePriceTiers =
+        new Map<number, WholesalePriceTier[]>();
+
+    // ---------------------------------------------------------
+    // Variant wholesale tiers
+    // ---------------------------------------------------------
+
+    const variantWholesalePriceTiers =
+        new Map<number, WholesalePriceTier[]>();
+
+    for (const tier of wholesalePriceTiers) {
+        // Product tier
+        if (tier.product) {
+            const productId =
+                tier.product.productId;
+
+            if (
+                !productWholesalePriceTiers.has(
+                    productId
+                )
+            ) {
+                productWholesalePriceTiers.set(
+                    productId,
+                    []
+                );
+            }
+
+            productWholesalePriceTiers
+                .get(productId)!
+                .push(tier);
+        }
+
+        // Variant tier
+        if (tier.variant) {
+            const variantId =
+                tier.variant.variantId;
+
+            if (
+                !variantWholesalePriceTiers.has(
+                    variantId
+                )
+            ) {
+                variantWholesalePriceTiers.set(
+                    variantId,
+                    []
+                );
+            }
+
+            variantWholesalePriceTiers
+                .get(variantId)!
+                .push(tier);
+        }
+    }
+
+    // ---------------------------------------------------------
+    // Media by product
+    // ---------------------------------------------------------
+
+    const mediaByProduct =
+        new Map<number, any[]>();
+
+    for (const media of productMedia) {
+        const productId =
+            media.product?.productId ??
+            media.product?.productId;
+
+        if (!productId) {
+            continue;
+        }
+
+        if (
+            !mediaByProduct.has(
+                productId
+            )
+        ) {
+            mediaByProduct.set(
+                productId,
+                []
+            );
+        }
+
+        mediaByProduct
+            .get(productId)!
+            .push(media);
+    }
+
+    // ---------------------------------------------------------
+    // Product technical details
+    // ---------------------------------------------------------
+
+    const productTechnicalDetailsByProduct =
+        new Map<number, any[]>();
+
+    for (
+        const detail of productTechnicalDetails
+    ) {
+        const productId =
+            detail.product?.productId ??
+            detail.product?.productId;
+
+        if (!productId) {
+            continue;
+        }
+
+        if (
+            !productTechnicalDetailsByProduct.has(
+                productId
+            )
+        ) {
+            productTechnicalDetailsByProduct.set(
+                productId,
+                []
+            );
+        }
+
+        productTechnicalDetailsByProduct
+            .get(productId)!
+            .push(detail);
+    }
+
+    // =========================================================
+    // 9. ATTACH VARIANT RELATIONS
+    // =========================================================
+
+    for (const variant of variants) {
+        variant.variantImages =
+            imagesByVariant.get(
+                variant.variantId
+            ) ?? [];
+
+        variant.technicalDetails =
+            variantTechnicalDetailsByVariant.get(
+                variant.variantId
+            ) ?? [];
+
+        variant.wholesalePriceTiers =
+            variantWholesalePriceTiers.get(
+                variant.variantId
+            ) ?? [];
+    }
+
+    // =========================================================
+    // 10. ATTACH PRODUCT RELATIONS
+    // =========================================================
+
+    for (const product of products) {
+        product.variants =
+            variantsByProduct.get(
+                product.productId
+            ) ?? [];
+
+        product.media =
+            mediaByProduct.get(
+                product.productId
+            ) ?? [];
+
+        product.technicalDetails =
+            productTechnicalDetailsByProduct.get(
+                product.productId
+            ) ?? [];
+
+        product.wholesalePriceTiers =
+            productWholesalePriceTiers.get(
+                product.productId
+            ) ?? [];
+    }
+
+    // =========================================================
+    // 11. RESTORE PAGINATION ORDER
+    // =========================================================
+
+    const productMap =
+        new Map(
+            products.map(product => [
+                product.productId,
+                product,
+            ])
+        );
+
+    const orderedProducts =
+        productIds
+            .map(id =>
+                productMap.get(id)
+            )
+            .filter(
+                (
+                    product
+                ): product is NonNullable<
+                    typeof product
+                > =>
+                    Boolean(product)
+            );
+
+    // =========================================================
+    // FINAL RESPONSE
+    // =========================================================
+
+    console.log(
+        "Products:",
+        orderedProducts.length
     );
 
     console.log(
-        `Total products: ${total}`
+        "Total:",
+        total
     );
 
-    // ---------------------------------------------------------
-    // SAME RESPONSE FORMAT AS BEFORE
-    // ---------------------------------------------------------
+    console.log(
+        "========== GET PRODUCTS END =========="
+    );
 
     return {
-        products,
+        products: orderedProducts,
         total,
         offset: safeOffset,
         limit: safeLimit,
