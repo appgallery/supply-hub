@@ -165,8 +165,11 @@ export const getAdminDashboardController = async (
 ) => {
     try {
 
+        const { month, year } = req.query;
         const result = await getAdminDashboard(
-            req.user!.userId
+            req.user!.userId,
+            Number(month),
+            Number(year)
         );
 
         return res.status(200).json({
