@@ -319,8 +319,6 @@ export const generateProductCode = async () => {
     return `PRD${String(lastNumber + 1).padStart(6, "0")}`;
 }
 
-import { In } from "typeorm";
-
 export const getProducts = async (
     userId: number,
     categoryId?: number,
@@ -336,7 +334,7 @@ export const getProducts = async (
     offset: number = 0,
     limit: number = 10
 ) => {
-
+    console.log("Service started");
     const user = await userRepository.findOne({
         where: { userId },
         relations: ["client", "role"],
@@ -345,22 +343,59 @@ export const getProducts = async (
     if (!user) {
         throw new Error("User not found.");
     }
-
-    // =======================
-    // First Query (Only Product IDs)
-    // =======================
-
+    console.log("User fetched");
     const query = productRepository
         .createQueryBuilder("product")
-        .leftJoin("product.category", "category")
-        .leftJoin("category.client", "client")
-        .leftJoin("product.variants", "variants")
-        .leftJoin("variants.color", "color")
-        .leftJoin("variants.size", "size")
+        .leftJoinAndSelect("product.category", "category")
+        .leftJoinAndSelect("category.client", "client")
+
+        // Product details
+        .leftJoinAndSelect(
+            "product.technicalDetails",
+            "productTechnicalDetails"
+        )
+        .leftJoinAndSelect(
+            "product.wholesalePriceTiers",
+            "productWholesalePriceTiers"
+        )
+
+        // Variants
+        .leftJoinAndSelect(
+            "product.variants",
+            "variants"
+        )
+        .leftJoinAndSelect(
+            "variants.color",
+            "color"
+        )
+        .leftJoinAndSelect(
+            "variants.size",
+            "size"
+        )
+        .leftJoinAndSelect(
+            "variants.variantImages",
+            "variantImages"
+        )
+        .leftJoinAndSelect(
+            "variants.technicalDetails",
+            "variantTechnicalDetails"
+        )
+        .leftJoinAndSelect(
+            "variants.wholesalePriceTiers",
+            "variantWholesalePriceTiers"
+        )
+
+        // Product media
+        .leftJoinAndSelect(
+            "product.media",
+            "media"
+        )
+
         .where("product.is_active = :active", {
             active: true,
         });
 
+    // Client wise products
     if (user.role.name !== Role.SUPER_ADMIN) {
         query.andWhere(
             "client.clientId = :clientId",
@@ -370,6 +405,7 @@ export const getProducts = async (
         );
     }
 
+    // Category filter
     if (categoryId) {
         query.andWhere(
             "category.categoryId = :categoryId",
@@ -379,23 +415,22 @@ export const getProducts = async (
         );
     }
 
+    // Search
     if (search) {
         query.andWhere(
             `(
-                category.categoryName ILIKE :search
-                OR product.productName ILIKE :search
-                OR product.productCode ILIKE :search
-                OR variants.sku ILIKE :search
-                OR variants.name ILIKE :search
-                OR color.name ILIKE :search
-                OR size.name ILIKE :search
-            )`,
+            category.categoryName ILIKE :search
+            OR product.productName ILIKE :search
+            OR product.productCode ILIKE :search
+            OR color.name ILIKE :search
+            OR size.name ILIKE :search
+        )`,
             {
                 search: `%${search}%`,
             }
         );
     }
-
+    // Sorting
     switch (sortBy) {
         case "name":
             query.orderBy(
@@ -431,63 +466,18 @@ export const getProducts = async (
                 sortOrder
             );
     }
-
-    const [baseProducts, total] = await query
+    console.log(query.getSql());
+    console.log("Query built");
+    const products = await query
         .skip(offset)
         .take(limit)
-        .getManyAndCount();
+        .getMany();
 
-    if (!baseProducts.length) {
-        return {
-            products: [],
-            total,
-            offset,
-            limit,
-        };
-    }
-
-    const productIds = baseProducts.map(
-        (p) => p.productId
-    );
-
-    // =======================
-    // Second Query (Load Relations)
-    // =======================
-
-    const products = await productRepository.find({
-        where: {
-            productId: In(productIds),
-        },
-        relations: [
-            "category",
-            "category.client",
-
-            "media",
-
-            "technicalDetails",
-            "wholesalePriceTiers",
-
-            "variants",
-            "variants.color",
-            "variants.size",
-            "variants.variantImages",
-            "variants.technicalDetails",
-            "variants.wholesalePriceTiers",
-        ],
-    });
-
-    // Keep same order as first query
-    const orderedProducts = productIds
-        .map((id) =>
-            products.find(
-                (p) => p.productId === id
-            )
-        )
-        .filter(Boolean);
-
+    console.log("Query executed");
+    console.log("Sending response...");
     return {
-        products: orderedProducts,
-        total,
+        products,
+        total: products.length,
         offset,
         limit,
     };
