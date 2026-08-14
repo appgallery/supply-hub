@@ -468,15 +468,16 @@ export const getProducts = async (
                 sortOrder
             );
     }
-console.log("Query built");
-    const [products, total] = await query
+    console.log("Query built");
+    const products = await query
         .skip(offset)
         .take(limit)
-        .getManyAndCount();
-console.log("Query executed");
+        .getMany();
+
+    console.log("Query executed");
     return {
         products,
-        total,
+        total: products.length,
         offset,
         limit,
     };
