@@ -468,6 +468,7 @@ export const getProducts = async (
                 sortOrder
             );
     }
+    console.log(query.getSql());
     console.log("Query built");
     const products = await query
         .skip(offset)
@@ -475,6 +476,7 @@ export const getProducts = async (
         .getMany();
 
     console.log("Query executed");
+    console.log("Sending response...");
     return {
         products,
         total: products.length,
