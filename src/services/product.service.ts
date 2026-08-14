@@ -1,4 +1,4 @@
-import { MoreThanOrEqual } from "typeorm";
+import { EntityManager, MoreThanOrEqual } from "typeorm";
 import { Color } from "../entities/Color";
 import { Product } from "../entities/Product";
 import { ProductMedia } from "../entities/ProductMedia";
@@ -171,15 +171,7 @@ export const createProduct = async (
         // ================= Variants =================
 
         for (const item of variants) {
-            const existingSku = await manager.findOne(Variant, {
-                where: {
-                    sku: item.sku,
-                },
-            });
-
-            if (existingSku) {
-                throw new Error(`SKU ${item.sku} already exists.`);
-            }
+            const sku = await generateVariantSku(manager);
 
             let color = null;
             let size = null;
@@ -209,7 +201,7 @@ export const createProduct = async (
             const variant = manager.create(Variant, {
                 product: savedProduct,
                 name: item.name,
-                sku: item.sku,
+                sku,
                 price: item.price,
                 unit_text: item.unit_text,
                 min_delivery_days: item.min_delivery_days,
@@ -292,6 +284,22 @@ export const createProduct = async (
             ],
         });
     });
+};
+
+export const generateVariantSku = async (
+    manager: EntityManager
+): Promise<string> => {
+    while (true) {
+        const sku = `SKU${Date.now()}${Math.floor(Math.random() * 1000)}`;
+
+        const exists = await manager.findOne(Variant, {
+            where: { sku },
+        });
+
+        if (!exists) {
+            return sku;
+        }
+    }
 };
 
 export const generateProductCode = async () => {
