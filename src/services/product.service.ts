@@ -379,33 +379,34 @@ export const getProducts = async (
 
     const productQuery = productRepository
         .createQueryBuilder("product")
-        .leftJoin(
-            "product.category",
-            "category"
-        )
-        .leftJoin(
-            "category.client",
-            "client"
-        )
-        .where(
+        .leftJoin("product.category", "category")
+        .leftJoin("category.client", "client");
+
+    if (user.role.name === Role.SUB_CLIENT) {
+        productQuery.where(
             "product.is_active = :active",
             {
                 active: true,
             }
         );
-
-    // =========================================================
-    // CLIENT FILTER
-    // =========================================================
+    }
 
     if (user.role.name !== Role.SUPER_ADMIN) {
-        productQuery.andWhere(
-            "client.clientId = :clientId",
-            {
-                clientId:
-                    user.client.clientId,
-            }
-        );
+        if (user.role.name === Role.SUB_CLIENT) {
+            productQuery.andWhere(
+                "client.clientId = :clientId",
+                {
+                    clientId: user.client.clientId,
+                }
+            );
+        } else {
+            productQuery.where(
+                "client.clientId = :clientId",
+                {
+                    clientId: user.client.clientId,
+                }
+            );
+        }
     }
 
     // =========================================================
