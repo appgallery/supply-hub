@@ -334,6 +334,7 @@ export const getProducts = async (
     offset: number = 0,
     limit: number = 10
 ) => {
+    console.log("Service started");
     const user = await userRepository.findOne({
         where: { userId },
         relations: ["client", "role"],
@@ -342,7 +343,7 @@ export const getProducts = async (
     if (!user) {
         throw new Error("User not found.");
     }
-
+    console.log("User fetched");
     const query = productRepository
         .createQueryBuilder("product")
         .leftJoinAndSelect("product.category", "category")
@@ -467,12 +468,12 @@ export const getProducts = async (
                 sortOrder
             );
     }
-
+console.log("Query built");
     const [products, total] = await query
         .skip(offset)
         .take(limit)
         .getManyAndCount();
-
+console.log("Query executed");
     return {
         products,
         total,

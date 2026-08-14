@@ -25,6 +25,7 @@ export const getProductController = async (
     res: Response
 ) => {
     try {
+        console.log("Controller started");
         const userId = (req as any).user.userId;
 
         const categoryId = req.query.categoryId
@@ -59,6 +60,8 @@ export const getProductController = async (
             offset,
             limit
         );
+
+        console.log("Service completed");
 
         return res.status(200).json({
             status: true,
