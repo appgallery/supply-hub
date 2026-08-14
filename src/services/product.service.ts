@@ -349,41 +349,41 @@ export const getProducts = async (
         .leftJoinAndSelect("product.category", "category")
         .leftJoinAndSelect("category.client", "client")
 
-        // Product details
-        .leftJoinAndSelect(
-            "product.technicalDetails",
-            "productTechnicalDetails"
-        )
-        .leftJoinAndSelect(
-            "product.wholesalePriceTiers",
-            "productWholesalePriceTiers"
-        )
+        // // Product details
+        // .leftJoinAndSelect(
+        //     "product.technicalDetails",
+        //     "productTechnicalDetails"
+        // )
+        // .leftJoinAndSelect(
+        //     "product.wholesalePriceTiers",
+        //     "productWholesalePriceTiers"
+        // )
 
-        // Variants
-        .leftJoinAndSelect(
-            "product.variants",
-            "variants"
-        )
-        .leftJoinAndSelect(
-            "variants.color",
-            "color"
-        )
-        .leftJoinAndSelect(
-            "variants.size",
-            "size"
-        )
-        .leftJoinAndSelect(
-            "variants.variantImages",
-            "variantImages"
-        )
-        .leftJoinAndSelect(
-            "variants.technicalDetails",
-            "variantTechnicalDetails"
-        )
-        .leftJoinAndSelect(
-            "variants.wholesalePriceTiers",
-            "variantWholesalePriceTiers"
-        )
+        // // Variants
+        // .leftJoinAndSelect(
+        //     "product.variants",
+        //     "variants"
+        // )
+        // .leftJoinAndSelect(
+        //     "variants.color",
+        //     "color"
+        // )
+        // .leftJoinAndSelect(
+        //     "variants.size",
+        //     "size"
+        // )
+        // .leftJoinAndSelect(
+        //     "variants.variantImages",
+        //     "variantImages"
+        // )
+        // .leftJoinAndSelect(
+        //     "variants.technicalDetails",
+        //     "variantTechnicalDetails"
+        // )
+        // .leftJoinAndSelect(
+        //     "variants.wholesalePriceTiers",
+        //     "variantWholesalePriceTiers"
+        // )
 
         // Product media
         .leftJoinAndSelect(
