@@ -2047,6 +2047,10 @@ export const toggleProductStatus = async (
     if (roleName === Role.SUPER_ADMIN) {
         product = await productRepository.findOne({
             where: { productId },
+            relations: [
+                "category",
+                "category.client",
+            ],
         });
     } else {
         product = await productRepository.findOne({
@@ -2071,6 +2075,21 @@ export const toggleProductStatus = async (
     product.updated_by = user.userId;
 
     await productRepository.save(product);
+
+    const fullName = `${user.firstName} ${user.lastName}`;
+
+    await createActivity(
+        `Product "${product.productName}" has been ${product.is_active ? "activated" : "deactivated"
+        } by ${fullName}.`,
+        product.is_active
+            ? ActivityType.PRODUCT_ACTIVATED
+            : ActivityType.PRODUCT_DEACTIVATED,
+        roleName === Role.CLIENT
+            ? user.client.clientId
+            : product.category?.client?.clientId,
+        undefined,
+        user.userId
+    );
 
     return {
         message: product.is_active
