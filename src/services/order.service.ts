@@ -699,6 +699,44 @@ export const getClientDashboard = async (
         },
     });
 
+    const totalVariants = await variantRepository.count({
+        where: {
+            product: {
+                category: {
+                    client: {
+                        clientId,
+                    },
+                },
+            },
+        },
+    });
+
+    const currentVariants = await variantRepository.count({
+        where: {
+            product: {
+                category: {
+                    client: {
+                        clientId,
+                    },
+                },
+            },
+            created_at: Between(startCurrentMonth, endCurrentMonth),
+        },
+    });
+
+    const lastMonthVariants = await variantRepository.count({
+        where: {
+            product: {
+                category: {
+                    client: {
+                        clientId,
+                    },
+                },
+            },
+            created_at: Between(startLastMonth, endLastMonth),
+        },
+    });
+
     const revenue = await orderRepository
         .createQueryBuilder("order")
         .select("SUM(order.totalAmount)", "revenue")
@@ -844,6 +882,16 @@ export const getClientDashboard = async (
                 percentage: calculatePercentage(
                     currentOrders,
                     lastMonthOrders
+                ),
+            },
+
+            totalVariants: {
+                total: totalVariants,
+                thisMonth: currentVariants,
+                lastMonth: lastMonthVariants,
+                percentage: calculatePercentage(
+                    currentVariants,
+                    lastMonthVariants
                 ),
             },
 
