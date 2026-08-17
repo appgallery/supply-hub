@@ -1017,7 +1017,7 @@ export const getAdminDashboard = async (
 
     });
     // Revenue
-    const revenue = await orderRepository
+    const currentRevenue = await orderRepository
         .createQueryBuilder("order")
         .select("COALESCE(SUM(order.totalAmount),0)", "revenue")
         .where(
@@ -1025,6 +1025,18 @@ export const getAdminDashboard = async (
             {
                 start: startCurrentMonth,
                 end: endCurrentMonth,
+            }
+        )
+        .getRawOne();
+
+    const lastMonthRevenue = await orderRepository
+        .createQueryBuilder("order")
+        .select("COALESCE(SUM(order.totalAmount),0)", "revenue")
+        .where(
+            "order.created_at BETWEEN :start AND :end",
+            {
+                start: startLastMonth,
+                end: endLastMonth,
             }
         )
         .getRawOne();
@@ -1190,7 +1202,15 @@ export const getAdminDashboard = async (
                 ),
             },
 
-            totalRevenue: Number(revenue.revenue),
+            totalRevenue: {
+                total: Number(currentRevenue.revenue), // revenue for selected/current month
+                thisMonth: Number(currentRevenue.revenue),
+                lastMonth: Number(lastMonthRevenue.revenue),
+                percentage: calculatePercentage(
+                    Number(currentRevenue.revenue),
+                    Number(lastMonthRevenue.revenue)
+                ),
+            },
         },
 
         revenueOverview,
