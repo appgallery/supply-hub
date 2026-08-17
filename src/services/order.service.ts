@@ -1049,6 +1049,24 @@ export const getAdminDashboard = async (
         .limit(10)
         .getRawMany();
 
+    const currentDealers = await subClientRepository.count({
+        where: {
+            createdAt: Between(
+                startCurrentMonth,
+                endCurrentMonth
+            )
+        }
+    });
+
+    const lastMonthDealers = await subClientRepository.count({
+        where: {
+            createdAt: Between(
+                startLastMonth,
+                endLastMonth
+            )
+        }
+    });
+
     // Revenue Overview (Weekly)
     const revenueOverview = [];
 
@@ -1145,9 +1163,13 @@ export const getAdminDashboard = async (
 
             totalDealers: {
                 total: totalDealers,
-                // Add dealer month comparison if required
+                thisMonth: currentDealers,
+                lastMonth: lastMonthDealers,
+                percentage: calculatePercentage(
+                    currentDealers,
+                    lastMonthDealers
+                ),
             },
-
             totalProducts: {
                 total: totalProducts,
                 thisMonth: currentProducts,
