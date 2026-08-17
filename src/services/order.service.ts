@@ -521,26 +521,59 @@ export const updateOrder = async (
 };
 
 export const getClientDashboard = async (
-    clientId: number
+    clientId: number,
+    month?: number,
+    year?: number
 ) => {
     const now = new Date();
 
+    const selectedYear = year ?? now.getFullYear();
+    const selectedMonth = month ?? (now.getMonth() + 1);
+
+    // Selected Month
     const startCurrentMonth = new Date(
-        now.getFullYear(),
-        now.getMonth(),
+        selectedYear,
+        selectedMonth - 1,
+        1,
+        0,
+        0,
+        0
+    );
+
+    const endCurrentMonth = new Date(
+        selectedYear,
+        selectedMonth,
+        0,
+        23,
+        59,
+        59,
+        999
+    );
+
+    // Previous Month
+    const previousMonthDate = new Date(
+        selectedYear,
+        selectedMonth - 2,
         1
     );
 
     const startLastMonth = new Date(
-        now.getFullYear(),
-        now.getMonth() - 1,
-        1
+        previousMonthDate.getFullYear(),
+        previousMonthDate.getMonth(),
+        1,
+        0,
+        0,
+        0
     );
 
     const endLastMonth = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        0
+        previousMonthDate.getFullYear(),
+        previousMonthDate.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
     );
 
     const calculatePercentage = (
@@ -563,7 +596,7 @@ export const getClientDashboard = async (
                     clientId: clientId
                 },
             },
-            created_at: Between(startCurrentMonth, now),
+            created_at: Between(startCurrentMonth, endCurrentMonth),
         },
     });
 
@@ -583,7 +616,7 @@ export const getClientDashboard = async (
             client: {
                 clientId: clientId,
             },
-            created_at: Between(startCurrentMonth, now),
+            created_at: Between(startCurrentMonth, endCurrentMonth),
         },
     });
 
@@ -601,7 +634,7 @@ export const getClientDashboard = async (
             client: {
                 clientId: clientId,
             },
-            createdAt: Between(startCurrentMonth, now),
+            createdAt: Between(startCurrentMonth, endCurrentMonth),
         },
     });
 
@@ -622,7 +655,7 @@ export const getClientDashboard = async (
         })
         .andWhere("order.created_at BETWEEN :start AND :end", {
             start: startCurrentMonth,
-            end: now,
+            end: endCurrentMonth,
         })
         .getRawOne();
 
@@ -684,6 +717,62 @@ export const getClientDashboard = async (
         .orderBy("SUM(order.totalAmount)", "DESC")
         .limit(10)
         .getRawMany();
+
+    const revenueOverview = [];
+
+    const daysInMonth = endCurrentMonth.getDate();
+
+    const weekRanges = [
+        { label: "Week 1", start: 1, end: 7 },
+        { label: "Week 2", start: 8, end: 14 },
+        { label: "Week 3", start: 15, end: 21 },
+        { label: "Week 4", start: 22, end: daysInMonth },
+    ];
+
+    for (const week of weekRanges) {
+
+        const startDate = new Date(
+            selectedYear,
+            selectedMonth - 1,
+            week.start,
+            0,
+            0,
+            0
+        );
+
+        const endDate = new Date(
+            selectedYear,
+            selectedMonth - 1,
+            week.end,
+            23,
+            59,
+            59,
+            999
+        );
+
+        const weeklyRevenue = await orderRepository
+            .createQueryBuilder("order")
+            .select(
+                "COALESCE(SUM(order.totalAmount),0)",
+                "revenue"
+            )
+            .where("order.clientId = :clientId", {
+                clientId,
+            })
+            .andWhere(
+                "order.created_at BETWEEN :start AND :end",
+                {
+                    start: startDate,
+                    end: endDate,
+                }
+            )
+            .getRawOne();
+
+        revenueOverview.push({
+            week: week.label,
+            revenue: Number(weeklyRevenue.revenue),
+        });
+    }
 
     const recentOrders = await orderRepository.find({
         where: {
@@ -768,7 +857,7 @@ export const getClientDashboard = async (
                 ),
             },
         },
-        revenueOverview: [],
+        revenueOverview,
         topClients,
         recentClients,
         recentOrders,

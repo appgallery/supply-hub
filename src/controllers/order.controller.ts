@@ -138,9 +138,12 @@ export const getClientDashboardController = async (
     res: Response
 ) => {
     try {
+        const { month, year } = req.query;
         const clientId = req.user!.clientId;
         const result = await getClientDashboard(
-            clientId
+            clientId,
+            Number(month),
+            Number(year)
         );
 
         return res.status(200).json({
