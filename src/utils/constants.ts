@@ -36,7 +36,8 @@ export enum SellerType {
 export enum Role {
   SUPER_ADMIN = "superadmin",
   CLIENT = "client",
-  SUB_CLIENT = "subclient"
+  SUB_CLIENT = "subclient",
+  ADMIN = "ADMIN"
 }
 
 export enum OrderStatus {

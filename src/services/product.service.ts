@@ -391,7 +391,10 @@ export const getProducts = async (
         );
     }
 
-    if (user.role.name !== Role.SUPER_ADMIN) {
+    if (
+        user.role.name !== Role.SUPER_ADMIN &&
+        user.role.name !== Role.ADMIN
+    ) {
         if (user.role.name === Role.SUB_CLIENT) {
             productQuery.andWhere(
                 "client.clientId = :clientId",
