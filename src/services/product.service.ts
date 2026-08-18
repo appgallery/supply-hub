@@ -547,18 +547,17 @@ export const getProducts = async (
         .getCount();
 
 
+    console.time("PRODUCT_ID_QUERY");
+
     const idRows = await productQuery
         .clone()
-        .select(
-            "product.productId",
-            "productId"
-        )
-        .skip(safeOffset)
-        .take(safeLimit)
-        .distinct(true)
+        .select("product.productId", "productId")
+        .offset(safeOffset)
+        .limit(safeLimit)
         .getRawMany();
 
     console.timeEnd("PRODUCT_ID_QUERY");
+
 
     const productIds = [
         ...new Set(
