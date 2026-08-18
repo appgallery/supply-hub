@@ -540,7 +540,11 @@ export const getProducts = async (
 
     console.time("COUNT_QUERY");
 
-    const total = await productQuery.clone().getCount();
+    const total = await productQuery
+        .clone()
+        .select("product.productId")
+        .distinct(true)
+        .getCount();
 
 
     const idRows = await productQuery
@@ -551,14 +555,18 @@ export const getProducts = async (
         )
         .skip(safeOffset)
         .take(safeLimit)
+        .distinct(true)
         .getRawMany();
 
     console.timeEnd("PRODUCT_ID_QUERY");
 
-    const productIds =
-        idRows.map(row =>
-            Number(row.productId)
-        );
+    const productIds = [
+        ...new Set(
+            idRows.map(row =>
+                Number(row.productId)
+            )
+        ),
+    ];
 
     console.log(
         "Product IDs:",
