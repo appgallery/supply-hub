@@ -27,6 +27,7 @@ export const getProductController = async (
 ) => {
     try {
         console.log("Controller started");
+
         const userId = (req as any).user.userId;
 
         const categoryId = req.query.categoryId
@@ -51,6 +52,11 @@ export const getProductController = async (
 
         const offset = Number(req.query.offset) || 0;
         const limit = Number(req.query.limit) || 10;
+
+        console.log("Pagination params:", {
+            offset,
+            limit,
+        });
 
         const response = await getProducts(
             userId,
