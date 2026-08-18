@@ -540,29 +540,18 @@ export const getProducts = async (
 
     console.time("COUNT_QUERY");
 
-    const total =
-        await productQuery.getCount();
+    const total = await productQuery.clone().getCount();
 
-    console.timeEnd("COUNT_QUERY");
 
-    // =========================================================
-    // 4. GET PRODUCT IDS FOR CURRENT PAGE
-    //
-    // This query only returns IDs.
-    // No huge relations.
-    // =========================================================
-
-    console.time("PRODUCT_ID_QUERY");
-
-    const idRows =
-        await productQuery
-            .select(
-                "product.productId",
-                "productId"
-            )
-            .skip(safeOffset)
-            .take(safeLimit)
-            .getRawMany();
+    const idRows = await productQuery
+        .clone()
+        .select(
+            "product.productId",
+            "productId"
+        )
+        .skip(safeOffset)
+        .take(safeLimit)
+        .getRawMany();
 
     console.timeEnd("PRODUCT_ID_QUERY");
 
