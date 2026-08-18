@@ -402,13 +402,6 @@ export const getProducts = async (
                     clientId: user.client.clientId,
                 }
             );
-        } else {
-            productQuery.where(
-                "client.clientId = :clientId",
-                {
-                    clientId: user.client.clientId,
-                }
-            );
         }
     }
 
