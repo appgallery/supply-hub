@@ -37,7 +37,7 @@ export enum Role {
   SUPER_ADMIN = "superadmin",
   CLIENT = "client",
   SUB_CLIENT = "subclient",
-  ADMIN = "ADMIN"
+  ADMIN = "admin"
 }
 
 export enum OrderStatus {
