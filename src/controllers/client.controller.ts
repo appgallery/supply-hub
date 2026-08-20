@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import * as clientService from "../services/client.service";
-import { getRazorpayAccountStatus } from "../services/client.service";
 import { AuthRequest } from "../middleware/auth.middleware";
 
 export const createClient = async (
@@ -132,36 +131,4 @@ export const deleteClient = async (
         });
 
     }
-};
-
-export const getClientRazorpayStatus = async (
-    req: AuthRequest,
-    res: Response
-) => {
-
-    try {
-
-        const clientId = req.user.clientId;
-        const result =
-            await getRazorpayAccountStatus(
-                clientId
-            );
-
-        return res.status(200).json({
-            status: true,
-            message: "Razorpay account status fetched successfully.",
-            data: result
-        });
-
-
-    } catch (error: any) {
-
-        return res.status(500).json({
-            status: false,
-            message: error.message || "Internal server error",
-            data: null,
-        });
-
-    }
-
 };

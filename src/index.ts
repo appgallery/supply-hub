@@ -22,9 +22,18 @@ app.use(
 );
 app.use(helmet());
 app.use(compression());
+app.use(morgan("dev"));
+// Razorpay webhook raw body
+app.use(
+    "/api/client/webhook/razorpay-account-update",
+    express.raw({
+        type: "application/json",
+    })
+);
+
+// Other APIs JSON parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(morgan("dev"));
 
 app.use("/api", apiRoutes);
 

@@ -121,10 +121,6 @@ export const createOrder = async (
 
     const orderItems: OrderItem[] = [];
 
-    const variantUpdates: {
-        variant: Variant;
-        quantity: number;
-    }[] = [];
 
     for (const item of cart.cartItems) {
 
@@ -164,10 +160,6 @@ export const createOrder = async (
 
         orderItems.push(orderItem);
 
-        variantUpdates.push({
-            variant,
-            quantity: item.quantity,
-        });
     }
 
     // Backend managed values
@@ -216,16 +208,6 @@ export const createOrder = async (
     }
 
     await orderItemRepository.save(orderItems);
-
-    for (const item of variantUpdates) {
-        item.variant.stock -= item.quantity;
-        await variantRepository.save(item.variant);
-    }
-
-    // Clear cart
-    await cartItemRepository.delete({
-        cart_id: cart.cartId,
-    });
 
     const orderDetails = await orderRepository.findOne({
         where: {
@@ -1314,6 +1296,8 @@ export const updateOrderStatus = async (
         throw new Error("Order not found.");
     }
 
+
+
     if (order.status !== OrderStatus.PENDING) {
         throw new Error(
             "Only pending orders can be updated."
@@ -1328,6 +1312,19 @@ export const updateOrderStatus = async (
         );
     }
     if (status === OrderStatus.APPROVED) {
+        const existingInvoice = await invoiceRepository.findOne({
+            where: {
+                order: {
+                    orderId: order.orderId
+                }
+            }
+        });
+
+        if (existingInvoice) {
+            throw new Error(
+                "Invoice already generated for this order."
+            );
+        }
         order.status = OrderStatus.APPROVED;
         order.approvedBy = user;
         order.approved_at = new Date();

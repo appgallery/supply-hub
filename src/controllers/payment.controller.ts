@@ -1,64 +1,312 @@
 import { Request, Response } from "express";
 import * as paymentService from "../services/payment.service";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { createPayment, exchangeAuthorizationCode, fetchRazorpayStatus, generateRazorpayOAuthUrl, processWebhook, removeRazorpayConnection, verifyRazorpayPayment } from "../services/payment.service";
 
-export const createPayment = async (
+
+export const getRazorpayConnectUrl = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+        if (!req.user?.clientId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized.",
+            });
+        }
+
+        const data = await generateRazorpayOAuthUrl(req.user.clientId);
+
+        return res.status(200).json({
+            status: true,
+            message: "Razorpay OAuth URL generated successfully.",
+            data: data,
+        });
+    } catch (error: any) {
+        console.error("Generate Razorpay OAuth URL Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Something went wrong.",
+        });
+    }
+};
+
+export const connectRazorpay = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+        const clientId = req.user?.clientId;
+
+        if (!clientId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized.",
+            });
+        }
+
+        const { code, state } = req.body;
+
+        if (!code || !state) {
+            return res.status(400).json({
+                success: false,
+                message: "Code and state are required.",
+            });
+        }
+
+        const result = await exchangeAuthorizationCode(
+            clientId,
+            code,
+            state
+        );
+
+        return res.status(200).json({
+            status: true,
+            message: "Razorpay connected successfully.",
+            data: result,
+        });
+    } catch (error: any) {
+        console.error("Connect Razorpay Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Something went wrong.",
+        });
+    }
+};
+
+export const razorpayWebhook = async (
     req: Request,
     res: Response
 ) => {
     try {
-        const { invoiceId } = req.body;
 
-        if (!invoiceId) {
+        console.log("Is Buffer:", Buffer.isBuffer(req.body));
+
+        console.log(
+            "Webhook Body:",
+            req.body.toString()
+        );
+
+        console.log(
+            "Signature:",
+            req.headers["x-razorpay-signature"]
+        );
+
+        const signature = req.headers[
+            "x-razorpay-signature"
+        ] as string;
+
+
+        if (!signature) {
             return res.status(400).json({
                 success: false,
-                message: "Invoice Id is required.",
+                message: "Webhook signature missing.",
             });
         }
 
-        const result = await paymentService.createPayment(invoiceId);
+        await processWebhook(
+            req.body,
+            signature
+        );
+
 
         return res.status(200).json({
             success: true,
-            message: "Payment order created successfully.",
-            data: result,
+            message: "Webhook processed successfully.",
         });
 
+
     } catch (error: any) {
+
+        console.error(
+            "Razorpay Webhook Error:",
+            error
+        );
+
+
         return res.status(400).json({
             success: false,
-            message: error.message,
+            message: error.message || "Webhook failed.",
         });
     }
 };
-export const verifyPayment = async (
+export const getRazorpayStatus = async (
     req: AuthRequest,
     res: Response
 ) => {
     try {
 
-        const userId = req.user.userId;
+        const clientId = req.user?.clientId;
 
-        const result = await paymentService.verifyPayment(
-            req.body,
-            userId
+        if (!clientId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized.",
+            });
+        }
+
+
+        const result = await fetchRazorpayStatus(
+            clientId
         );
 
+
         return res.status(200).json({
-            success: true,
+            status: true,
+            message: "Razorpay status fetched successfully.",
             data: result,
         });
 
+
     } catch (error: any) {
 
+        console.error(
+            "Get Razorpay Status Error:",
+            error
+        );
+
+
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Something went wrong.",
+        });
+    }
+};
+
+export const disconnectRazorpay = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+
+        const clientId = req.user?.clientId;
+
+
+        if (!clientId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized.",
+            });
+        }
+
+
+        await removeRazorpayConnection(
+            clientId
+        );
+
+
+        return res.status(200).json({
+            success: true,
+            message: "Razorpay disconnected successfully.",
+        });
+
+
+    } catch (error: any) {
+
+        console.error(
+            "Disconnect Razorpay Error:",
+            error
+        );
+
+
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Something went wrong.",
+        });
+    }
+};
+
+export const createInvoicePayment = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const {
+            invoiceId
+        } = req.body;
+        if (!invoiceId) {
+            throw new Error(
+                "Invoice id is required."
+            );
+        }
+        const result =
+            await createPayment(invoiceId);
+        return res.status(200).json({
+            status: true,
+            data: result
+        });
+
+    } catch (error: any) {
         return res.status(400).json({
             success: false,
-            message: error.message,
+            message: error.message
+        });
+    }
+};
+
+export const verifyPayment = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const {
+            transactionId,
+            razorpayPaymentId,
+            razorpayOrderId,
+            razorpaySignature,
+        } = req.body;
+
+        if (
+            !transactionId ||
+            !razorpayPaymentId ||
+            !razorpayOrderId ||
+            !razorpaySignature
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Payment details are required."
+            });
+        }
+
+        const result =
+            await verifyRazorpayPayment({
+                transactionId,
+                razorpayPaymentId,
+                razorpayOrderId,
+                razorpaySignature,
+            });
+
+        return res.status(200).json({
+            status: true,
+            message:
+                "Payment verified successfully.",
+            data: result,
+        });
+
+
+    } catch (error: any) {
+
+        console.error(
+            "Verify Payment Error:",
+            error
+        );
+
+
+        return res.status(400).json({
+
+            success: false,
+
+            message:
+                error.message ||
+                "Payment verification failed."
+
         });
 
     }
 };
-
 export const getPaymentDetails = async (
     req: Request,
     res: Response

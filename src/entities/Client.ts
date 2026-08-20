@@ -133,7 +133,23 @@ export class Client extends BaseEntity {
   @Column({
     nullable: true,
   })
-  razorpayOnboardingUrl: string;
+  razorpayOAuthState?: string;
+
+  @Column({
+    type: "timestamp",
+    nullable: true,
+  })
+  razorpayOAuthStateExpiry?: Date;
+
+  @Column({
+    nullable: true,
+  })
+  razorpayAccessToken: string;
+
+  @Column({
+    nullable: true,
+  })
+  razorpayRefreshToken: string;
 
   @OneToMany(() => User, (user) => user.client)
   users: User[];
