@@ -816,6 +816,7 @@ export const getClientDashboard = async (
             client: {
                 clientId: clientId,
             },
+            isActive: true,
         },
         order: {
             createdAt: "DESC",
