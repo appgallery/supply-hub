@@ -48,7 +48,7 @@ export const connectRazorpay = async (
 
         const { code, state } = req.body;
 
-        if (!code || !state) {
+        if (!code) {
             return res.status(400).json({
                 success: false,
                 message: "Code and state are required.",
@@ -69,7 +69,7 @@ export const connectRazorpay = async (
         console.error("Connect Razorpay Error:", error);
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message || "Something went wrong.",
         });
     }
@@ -202,6 +202,7 @@ export const deleteRazorpayAccount = async (req: Request, res: Response) => {
         });
     }
 };
+
 export const disconnectRazorpay = async (
     req: AuthRequest,
     res: Response
