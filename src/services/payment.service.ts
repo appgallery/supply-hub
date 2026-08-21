@@ -65,7 +65,7 @@ export const generateRazorpayOAuthUrl = async (
 export const exchangeAuthorizationCode = async (
     clientId: number,
     code: string,
-    state: string
+    // state: string
 ) => {
 
     const client = await clientRepository.findOne({
@@ -78,10 +78,10 @@ export const exchangeAuthorizationCode = async (
         throw new Error("Client not found.");
     }
 
-    // Validate state
-    if (client.razorpayOAuthState !== state) {
-        throw new Error("Invalid OAuth state.");
-    }
+    // // Validate state
+    // if (client.razorpayOAuthState !== state) {
+    //     throw new Error("Invalid OAuth state.");
+    // }
 
     if (
         !client.razorpayOAuthStateExpiry ||

@@ -3,7 +3,6 @@ import * as paymentService from "../services/payment.service";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { createPayment, deleteSubMerchant, exchangeAuthorizationCode, fetchRazorpayStatus, generateRazorpayOAuthUrl, processWebhook, removeRazorpayConnection, verifyRazorpayPayment } from "../services/payment.service";
 
-
 export const getRazorpayConnectUrl = async (
     req: AuthRequest,
     res: Response
@@ -58,8 +57,7 @@ export const connectRazorpay = async (
 
         const result = await exchangeAuthorizationCode(
             clientId,
-            code,
-            state
+            code
         );
 
         return res.status(200).json({
@@ -176,7 +174,6 @@ export const getRazorpayStatus = async (
         });
     }
 };
-
 
 export const deleteRazorpaySubMerchant = async (
     req: Request,
@@ -343,6 +340,7 @@ export const verifyPayment = async (
 
     }
 };
+
 export const getPaymentDetails = async (
     req: Request,
     res: Response
@@ -373,29 +371,3 @@ export const getPaymentDetails = async (
 
     }
 };
-
-// export const razorpayWebhook = async (
-//     req: Request,
-//     res: Response
-// ) => {
-//     try {
-
-//         await paymentService.razorpayWebhook(
-//             req.body,
-//             req.headers["x-razorpay-signature"] as string
-//         );
-
-//         return res.status(200).json({
-//             success: true,
-//             message: "Webhook processed successfully.",
-//         });
-
-//     } catch (error: any) {
-
-//         return res.status(400).json({
-//             success: false,
-//             message: error.message,
-//         });
-
-//     }
-// };
