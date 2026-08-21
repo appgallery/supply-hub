@@ -616,6 +616,7 @@ export const getClientDashboard = async (
             client: {
                 clientId: clientId,
             },
+            isActive: true,
             createdAt: Between(startCurrentMonth, endCurrentMonth),
         },
     });
@@ -625,6 +626,7 @@ export const getClientDashboard = async (
             client: {
                 clientId: clientId,
             },
+            isActive: true,
             createdAt: Between(startLastMonth, endLastMonth),
         },
     });
