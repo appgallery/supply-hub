@@ -16,6 +16,7 @@ import { Invoice } from "../entities/Invoice";
 import { User } from "../entities/User";
 import { Client } from "../entities/Client";
 import { Variant } from "../entities/Variants";
+import qs from "qs";
 
 const orderRepository = AppDataSource.getRepository(Order);
 const transactionRepository = AppDataSource.getRepository(Transaction);
@@ -90,36 +91,47 @@ export const exchangeAuthorizationCode = async (
         throw new Error("OAuth state expired.");
     }
 
-    const response = await axios.post(
-        "https://auth.razorpay.com/token",
-        {
-            client_id: process.env.RAZORPAY_CLIENT_ID,
-            client_secret: process.env.RAZORPAY_CLIENT_SECRET,
-            grant_type: "authorization_code",
-            code,
-            redirect_uri: process.env.RAZORPAY_REDIRECT_URL,
-        },
-        {
-            headers: {
-                "Content-Type": "application/json",
-            },
-        }
-    );
+    try {
 
-    const token = response.data;
+        const response = await axios.post(
+            "https://auth.razorpay.com/token",
+            qs.stringify({
+                client_id: process.env.RAZORPAY_CLIENT_ID,
+                client_secret: process.env.RAZORPAY_CLIENT_SECRET,
+                grant_type: "authorization_code",
+                code,
+                redirect_uri: process.env.RAZORPAY_REDIRECT_URL,
+            }),
+            {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            }
+        );
 
-    client.razorpayAccessToken = token.access_token;
-    client.razorpayRefreshToken = token.refresh_token;
+        const token = response.data;
 
-    // Clear state after successful OAuth
-    client.razorpayOAuthState = null;
-    client.razorpayOAuthStateExpiry = null;
+        client.razorpayAccessToken = token.access_token;
+        client.razorpayRefreshToken = token.refresh_token;
 
-    await clientRepository.save(client);
+        client.razorpayOAuthState = null;
+        client.razorpayOAuthStateExpiry = null;
 
-    return {
-        connected: true,
-    };
+        await clientRepository.save(client);
+
+        return {
+            connected: true,
+        };
+
+    } catch (error: any) {
+
+        console.log(
+            "Razorpay OAuth Error:",
+            error.response?.data
+        );
+
+        throw error;
+    }
 };
 
 export const processWebhook = async (
@@ -298,9 +310,9 @@ export const deleteSubMerchant = async (accountId: string) => {
         const response = await axios.delete(
             `https://api.razorpay.com/v2/accounts/${accountId}`,
             {
-                headers: {
-                    Authorization: `Bearer ${client.razorpayAccessToken}`,
-                },
+                // headers: {
+                //     Authorization: `Bearer ${client.razorpayAccessToken}`,
+                // },
             }
         );
         return response.data;
