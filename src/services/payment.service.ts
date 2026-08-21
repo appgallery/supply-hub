@@ -222,7 +222,6 @@ export const fetchRazorpayStatus = async (
         throw new Error("Client not found.");
     }
 
-
     return {
         connected: !!client.razorpayLinkedAccountId,
         accountId: client.razorpayLinkedAccountId,
@@ -252,6 +251,20 @@ export const removeRazorpayConnection = async (
     await clientRepository.save(client);
 
     return true;
+};
+
+export const deleteSubMerchant = async (accountId: string) => {
+  const response = await axios.delete(
+    `https://api.razorpay.com/v2/accounts/${accountId}`,
+    {
+      auth: {
+        username: process.env.RAZORPAY_KEY_ID!,
+        password: process.env.RAZORPAY_KEY_SECRET!,
+      },
+    }
+  );
+
+  return response.data;
 };
 
 
@@ -351,8 +364,6 @@ export const createPayment = async (
             }
         });
 
-
-
     // Create Transaction
 
     const transaction =
@@ -422,8 +433,6 @@ export const verifyRazorpayPayment = async (
                 "invoice.order.subClient",
             ],
         });
-
-
 
     if (!transaction) {
         throw new Error(

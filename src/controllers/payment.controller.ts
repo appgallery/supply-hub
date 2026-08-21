@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import * as paymentService from "../services/payment.service";
 import { AuthRequest } from "../middleware/auth.middleware";
-import { createPayment, exchangeAuthorizationCode, fetchRazorpayStatus, generateRazorpayOAuthUrl, processWebhook, removeRazorpayConnection, verifyRazorpayPayment } from "../services/payment.service";
+import { createPayment, deleteSubMerchant, exchangeAuthorizationCode, fetchRazorpayStatus, generateRazorpayOAuthUrl, processWebhook, removeRazorpayConnection, verifyRazorpayPayment } from "../services/payment.service";
 
 
 export const getRazorpayConnectUrl = async (
@@ -133,6 +133,7 @@ export const razorpayWebhook = async (
         });
     }
 };
+
 export const getRazorpayStatus = async (
     req: AuthRequest,
     res: Response
@@ -172,6 +173,41 @@ export const getRazorpayStatus = async (
         return res.status(500).json({
             success: false,
             message: error.message || "Something went wrong.",
+        });
+    }
+};
+
+
+export const deleteRazorpaySubMerchant = async (
+    req: Request,
+    res: Response
+): Promise<Response> => {
+    try {
+        const { accountId } = req.query;
+
+        if (!accountId) {
+            return res.status(400).json({
+                status: false,
+                message: "accountId is required",
+            });
+        }
+
+        const response = await deleteSubMerchant(String(accountId));
+
+        return res.status(200).json({
+            status: true,
+            message: "Sub-merchant account deleted successfully.",
+            data: response,
+        });
+    } catch (error: any) {
+        console.error("Delete Razorpay Account Error:", error?.response?.data || error);
+
+        return res.status(error?.response?.status || 500).json({
+            status: false,
+            message:
+                error?.response?.data?.error?.description ||
+                "Failed to delete Razorpay sub-merchant account.",
+            error: error?.response?.data || error.message,
         });
     }
 };
