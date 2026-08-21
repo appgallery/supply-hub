@@ -254,17 +254,28 @@ export const removeRazorpayConnection = async (
 };
 
 export const deleteSubMerchant = async (accountId: string) => {
-  const response = await axios.delete(
-    `https://api.razorpay.com/v2/accounts/${accountId}`,
-    {
-      auth: {
-        username: process.env.RAZORPAY_KEY_ID!,
-        password: process.env.RAZORPAY_KEY_SECRET!,
-      },
-    }
-  );
+    try {
+        console.log("KEY_ID:", process.env.RAZORPAY_KEY_ID);
+        console.log(
+            "KEY_SECRET exists:",
+            !!process.env.RAZORPAY_KEY_SECRET
+        );
+        const response = await axios.delete(
+            `https://api.razorpay.com/v2/accounts/${accountId}`,
+            {
+                auth: {
+                    username: process.env.RAZORPAY_KEY_ID!,
+                    password: process.env.RAZORPAY_KEY_SECRET!,
+                },
+            }
+        );
 
-  return response.data;
+        return response.data;
+    } catch (error: any) {
+        console.log(error.response?.status);
+        console.log(error.response?.data);
+        throw error;
+    }
 };
 
 
@@ -452,14 +463,14 @@ export const verifyRazorpayPayment = async (
     // Verify Razorpay Signature
     const generatedSignature =
         crypto
-        .createHmac(
-            "sha256",
-            process.env.RAZORPAY_KEY_SECRET!
-        )
-        .update(
-            `${razorpayOrderId}|${razorpayPaymentId}`
-        )
-        .digest("hex");
+            .createHmac(
+                "sha256",
+                process.env.RAZORPAY_KEY_SECRET!
+            )
+            .update(
+                `${razorpayOrderId}|${razorpayPaymentId}`
+            )
+            .digest("hex");
 
     if (
         generatedSignature !==
@@ -512,10 +523,10 @@ export const verifyRazorpayPayment = async (
             ],
         });
 
-    if(orderDetails){
-        for(
+    if (orderDetails) {
+        for (
             const item of orderDetails.items
-        ){
+        ) {
             item.variant.stock -=
                 item.quantity;
             await variantRepository.save(
