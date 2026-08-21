@@ -253,25 +253,67 @@ export const removeRazorpayConnection = async (
     return true;
 };
 
+export const getAccessTokenForMerchant = async (accountId: string) => {
+    const client = await clientRepository.findOne({
+        where: { razorpayLinkedAccountId: accountId },
+    });
+
+    if (!client) {
+        throw new Error("No client found for this Razorpay account.");
+    }
+
+    if (!client.razorpayAccessToken) {
+        throw new Error("Client has not completed Razorpay OAuth authorization.");
+    }
+
+    return client;
+};
+
+export const refreshRazorpayAccessToken = async (client: Client) => {
+    const response = await axios.post(
+        "https://auth.razorpay.com/token",
+        {
+            client_id: process.env.RAZORPAY_CLIENT_ID,
+            client_secret: process.env.RAZORPAY_CLIENT_SECRET,
+            grant_type: "refresh_token",
+            refresh_token: client.razorpayRefreshToken,
+        },
+        { headers: { "Content-Type": "application/json" } }
+    );
+
+    const token = response.data;
+
+    client.razorpayAccessToken = token.access_token;
+    client.razorpayRefreshToken = token.refresh_token;
+    await clientRepository.save(client);
+
+    return client.razorpayAccessToken;
+};
+
+
 export const deleteSubMerchant = async (accountId: string) => {
+    const client = await getAccessTokenForMerchant(accountId);
+
     try {
-        console.log("KEY_ID:", process.env.RAZORPAY_KEY_ID);
-        console.log(
-            "KEY_SECRET exists:",
-            !!process.env.RAZORPAY_KEY_SECRET
-        );
         const response = await axios.delete(
             `https://api.razorpay.com/v2/accounts/${accountId}`,
             {
-                auth: {
-                    username: process.env.RAZORPAY_KEY_ID!,
-                    password: process.env.RAZORPAY_KEY_SECRET!,
+                headers: {
+                    Authorization: `Bearer ${client.razorpayAccessToken}`,
                 },
             }
         );
-
         return response.data;
     } catch (error: any) {
+        // Access token expired — refresh and retry once
+        if (error.response?.status === 401) {
+            const newToken = await refreshRazorpayAccessToken(client);
+            const retryResponse = await axios.delete(
+                `https://api.razorpay.com/v2/accounts/${accountId}`,
+                { headers: { Authorization: `Bearer ${newToken}` } }
+            );
+            return retryResponse.data;
+        }
         console.log(error.response?.status);
         console.log(error.response?.data);
         throw error;

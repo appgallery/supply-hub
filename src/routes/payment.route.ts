@@ -8,7 +8,7 @@ router.post("/connect", authenticate, paymentcontroller.getRazorpayConnectUrl);
 router.post("/oauth", authenticate, paymentcontroller.connectRazorpay);
 router.get("/status", authenticate, paymentcontroller.getRazorpayStatus);
 router.delete("/disconnect", authenticate, paymentcontroller.disconnectRazorpay);
-router.delete("/delete-razorpay-account", paymentcontroller.deleteRazorpaySubMerchant);
+router.delete("/delete-razorpay-account", paymentcontroller.deleteRazorpayAccount);
 router.post("/create-payment", authenticate, paymentcontroller.createInvoicePayment);
 router.post("/verify", authenticate, paymentcontroller.verifyPayment);
 router.get("/get-payment-details", authenticate, paymentcontroller.getPaymentDetails);

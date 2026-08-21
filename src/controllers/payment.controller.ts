@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import * as paymentService from "../services/payment.service";
 import { AuthRequest } from "../middleware/auth.middleware";
-import { createPayment, deleteSubMerchant, exchangeAuthorizationCode, fetchRazorpayStatus, generateRazorpayOAuthUrl, processWebhook, removeRazorpayConnection, verifyRazorpayPayment } from "../services/payment.service";
+import { createPayment, deleteSubMerchant, exchangeAuthorizationCode, fetchRazorpayStatus, generateRazorpayOAuthUrl, getAccessTokenForMerchant, processWebhook, removeRazorpayConnection, verifyRazorpayPayment } from "../services/payment.service";
 
 export const getRazorpayConnectUrl = async (
     req: AuthRequest,
@@ -175,12 +175,9 @@ export const getRazorpayStatus = async (
     }
 };
 
-export const deleteRazorpaySubMerchant = async (
-    req: Request,
-    res: Response
-): Promise<Response> => {
+export const deleteRazorpayAccount = async (req: Request, res: Response) => {
     try {
-        const { accountId } = req.query;
+        const { accountId } = req.query as { accountId: string };
 
         if (!accountId) {
             return res.status(400).json({
@@ -189,26 +186,22 @@ export const deleteRazorpaySubMerchant = async (
             });
         }
 
-        const response = await deleteSubMerchant(String(accountId));
+        const result = await deleteSubMerchant(accountId);
 
         return res.status(200).json({
             status: true,
-            message: "Sub-merchant account deleted successfully.",
-            data: response,
+            message: "Account deleted successfully",
+            data: result,
         });
     } catch (error: any) {
-        console.error("Delete Razorpay Account Error:", error?.response?.data || error);
-
-        return res.status(error?.response?.status || 500).json({
+        console.log("Delete Razorpay Account Error:", error.response?.data || error.message);
+        return res.status(error.response?.status || 500).json({
             status: false,
-            message:
-                error?.response?.data?.error?.description ||
-                "Failed to delete Razorpay sub-merchant account.",
-            error: error?.response?.data || error.message,
+            message: "Failed to delete Razorpay account",
+            error: error.response?.data || error.message,
         });
     }
 };
-
 export const disconnectRazorpay = async (
     req: AuthRequest,
     res: Response
