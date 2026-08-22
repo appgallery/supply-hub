@@ -34,7 +34,11 @@ export class Transaction extends BaseEntity {
     })
     razorpaySignature: string;
 
-    @Column()
+    @Column({
+        type: "decimal",
+        precision: 10,
+        scale: 2
+    })
     amount: number;
 
     @Column()
