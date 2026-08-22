@@ -1174,9 +1174,11 @@ const handlePaymentEvent = async (
 const handleOrderPaid = async (
     payload: any
 ) => {
+    console.log("handleOrderPaid called")
     const razorpayOrder =
         payload.payload?.order?.entity;
 
+    console.log("razorpayOrder", razorpayOrder)
 
     if (!razorpayOrder) {
         return;
@@ -1194,6 +1196,7 @@ const handleOrderPaid = async (
                 "invoice.order"
             ]
         });
+    console.log("transaction", transaction)
 
     if (!transaction) {
         console.warn(
@@ -1224,11 +1227,15 @@ const handleOrderPaid = async (
         transaction
     );
 
-    const invoice =
-        transaction.invoice;
+    const invoice = await invoiceRepository.findOne({
+        where: {
+            invoiceId: transaction.invoice.invoiceId
+        }
+    });
 
-    invoice.status =
-        InvoiceStatus.PAID;
+    console.log("invoice", invoice)
+
+    invoice.status = InvoiceStatus.PAID;
 
     await invoiceRepository.save(
         invoice
