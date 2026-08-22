@@ -98,6 +98,13 @@ export class SubClient extends BaseEntity {
   })
   postalCode: string;
 
+  @Column("decimal", {
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
+  shippingAmount: number;
+
   @Column({
     type: "decimal",
     precision: 12,

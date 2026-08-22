@@ -437,7 +437,6 @@ export const getAccessTokenForMerchant = async (
     return client;
 };
 
-
 export const refreshRazorpayAccessToken = async (
     client: Client
 ) => {
@@ -543,8 +542,6 @@ export const refreshRazorpayAccessToken = async (
     }
 };
 
-
-
 export const deleteSubMerchant = async (accountId: string) => {
     const client = await getAccessTokenForMerchant(accountId);
 
@@ -573,7 +570,6 @@ export const deleteSubMerchant = async (accountId: string) => {
         throw error;
     }
 };
-
 
 export const createPayment = async (
     invoiceId: number
@@ -821,6 +817,21 @@ export const createPayment = async (
         invoiceNumber:
             invoice.invoiceNumber,
 
+        subtotal:
+            invoice.order.subtotal,
+
+        discount:
+            invoice.order.totalDiscount,
+
+        tax:
+            invoice.tax,
+
+        shipping_amount:
+            invoice.shipping_amount,
+
+        totalAmount:
+            invoice.amount,
+
         razorpayOrderId:
             razorpayOrder.id,
 
@@ -834,7 +845,6 @@ export const createPayment = async (
             client.razorpayPublicToken,
     };
 };
-
 
 export const verifyRazorpayPayment = async (
     payload: {
@@ -1171,14 +1181,11 @@ const handlePaymentEvent = async (
 
 };
 
-const handleOrderPaid = async (
-    payload: any
-) => {
-    console.log("handleOrderPaid called")
+const handleOrderPaid = async (payload: any) => {
+    console.log("handleOrderPaid called");
+
     const razorpayOrder =
         payload.payload?.order?.entity;
-
-    console.log("razorpayOrder", razorpayOrder)
 
     if (!razorpayOrder) {
         return;
@@ -1188,95 +1195,135 @@ const handleOrderPaid = async (
     const transaction =
         await transactionRepository.findOne({
             where: {
-                razorpayOrderId:
-                    razorpayOrder.id
+                razorpayOrderId: razorpayOrder.id,
             },
             relations: [
                 "invoice",
-                "invoice.order"
-            ]
+                "invoice.order",
+            ],
         });
-    console.log("transaction", transaction)
+
 
     if (!transaction) {
         console.warn(
             "Transaction not found",
             razorpayOrder.id
         );
+        return;
+    }
 
-        return;
-    }
-    // prevent duplicate webhook
-    if (
-        transaction.status ===
-        TransactionStatus.SUCCESS
-    ) {
-        return;
-    }
 
     const payment =
         payload.payload?.payment?.entity;
 
-    transaction.razorpayPaymentId =
-        payment?.id;
 
-    transaction.status =
-        TransactionStatus.SUCCESS;
+    // Update transaction only once
+    if (
+        transaction.status !== TransactionStatus.SUCCESS
+    ) {
+        transaction.razorpayPaymentId =
+            payment?.id;
 
-    await transactionRepository.save(
-        transaction
-    );
+        transaction.status =
+            TransactionStatus.SUCCESS;
 
-    const invoice = await invoiceRepository.findOne({
-        where: {
-            invoiceId: transaction.invoice.invoiceId
-        }
-    });
+        await transactionRepository.save(transaction);
+    }
 
-    console.log("invoice", invoice)
 
-    invoice.status = InvoiceStatus.PAID;
+    const invoice =
+        await invoiceRepository.findOne({
+            where: {
+                invoiceId:
+                    transaction.invoice.invoiceId,
+            },
+        });
 
-    await invoiceRepository.save(
-        invoice
-    );
 
+    if (!invoice) {
+        throw new Error("Invoice not found");
+    }
+
+
+    // Update invoice
+    if (
+        invoice.status !== InvoiceStatus.PAID
+    ) {
+        invoice.status =
+            InvoiceStatus.PAID;
+
+        await invoiceRepository.save(invoice);
+    }
+
+
+
+    // Fetch order separately
     const order =
-        invoice.order;
+        await orderRepository.findOne({
+            where: {
+                orderId:
+                    invoice.order.orderId,
+            },
+        });
+
+
+    if (!order) {
+        throw new Error("Order not found");
+    }
+
+
+    console.log(
+        "Before order status:",
+        order.status
+    );
+
 
     order.status =
         OrderStatus.PROCESSING;
 
+    order.payment_status =
+        PaymentStatus.PAID;
 
-    await orderRepository.save(
-        order
+
+    await orderRepository.save(order);
+
+
+    console.log(
+        "Order updated:",
+        order.orderId,
+        order.status,
+        order.payment_status
     );
 
-    // Reduce stock only once
+
+
+    // Reduce stock once
     const orderDetails =
         await orderRepository.findOne({
             where: {
                 orderId:
-                    order.orderId
+                    order.orderId,
             },
             relations: [
                 "items",
-                "items.variant"
-            ]
+                "items.variant",
+            ],
         });
+
 
     if (orderDetails) {
 
         for (
             const item of orderDetails.items
         ) {
+
             item.variant.stock -=
                 item.quantity;
+
 
             await variantRepository.save(
                 item.variant
             );
         }
     }
-
 };

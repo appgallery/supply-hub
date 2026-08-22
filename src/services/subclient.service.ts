@@ -33,6 +33,7 @@ export const createSubClient = async (
         country,
         postalCode,
         creditLimit,
+        shippingAmount,
         availableCredit,
         firstName,
         lastName,
@@ -113,6 +114,7 @@ export const createSubClient = async (
         country,
         postalCode,
         creditLimit,
+        shippingAmount,
         availableCredit,
         client: createdBy.client,
         createdBy,
@@ -317,6 +319,7 @@ export const updateSubClient = async (
         postalCode,
         creditLimit,
         availableCredit,
+        shippingAmount,
         owner,
     } = body;
 
@@ -366,6 +369,7 @@ export const updateSubClient = async (
     subClient.postalCode = postalCode;
     subClient.creditLimit = creditLimit;
     subClient.availableCredit = availableCredit;
+    subClient.shippingAmount = shippingAmount;
 
     await subClientRepository.save(subClient);
 

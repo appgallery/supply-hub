@@ -54,6 +54,32 @@ export class CartItem {
     })
     discount_percentage: number;
 
+    @Column({
+        type: "decimal",
+        precision: 12,
+        scale: 2,
+        default: 0,
+    })
+    discount_amount: number;
+
+    // Price after discount (without tax/shipping)
+    @Column({
+        type: "decimal",
+        precision: 12,
+        scale: 2,
+        default: 0,
+    })
+    discounted_amount: number;
+
+    // Final item amount
+    @Column({
+        type: "decimal",
+        precision: 12,
+        scale: 2,
+        default: 0,
+    })
+    amount: number;
+
     @CreateDateColumn()
     createdOn: Date;
 

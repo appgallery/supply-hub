@@ -94,6 +94,21 @@ export const addToCart = async (
         ],
     });
 
+    const price = Number(variant.price);
+
+    const discountPercentage = Number(
+        variant.discount_percentage
+    );
+
+    const subtotal =
+        price * quantity;
+
+    const discountAmount =
+        (subtotal * discountPercentage) / 100;
+
+    const discountedAmount =
+        subtotal - discountAmount;
+
     if (cartItem) {
 
         const totalQty = cartItem.quantity + quantity;
@@ -104,11 +119,29 @@ export const addToCart = async (
             );
         }
 
+
+        const totalSubtotal =
+            price * totalQty;
+
+        const totalDiscount =
+            (totalSubtotal * discountPercentage) / 100;
+
+
         cartItem.quantity = totalQty;
-        cartItem.price = Number(variant.price);
-        cartItem.discount_percentage = Number(
-            variant.discount_percentage
-        );
+        cartItem.price = price;
+
+        cartItem.discount_percentage =
+            discountPercentage;
+
+        cartItem.discount_amount =
+            totalDiscount;
+
+        cartItem.discounted_amount =
+            totalSubtotal - totalDiscount;
+
+        cartItem.amount =
+            totalSubtotal - totalDiscount;
+
 
         await cartItemRepository.save(cartItem);
 
@@ -120,11 +153,17 @@ export const addToCart = async (
             variant,
             variant_id: variant.variantId,
             quantity,
-            price: Number(variant.price),
-            discount_percentage: Number(
-                variant.discount_percentage
-            ),
+            price,
+            discount_percentage:
+                discountPercentage,
+            discount_amount:
+                discountAmount,
+            discounted_amount:
+                discountedAmount,
+            amount:
+                discountedAmount,
         });
+
 
         await cartItemRepository.save(cartItem);
     }

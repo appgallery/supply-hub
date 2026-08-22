@@ -140,37 +140,42 @@ export const createOrder = async (
             );
         }
 
-        const price = Number(variant.price);
-        const discount =
-            (price * Number(variant.discount_percentage)) / 100;
+        const price = Number(item.price);
 
-        const finalPrice = price - discount;
-        const total = finalPrice * item.quantity;
+        const discount =
+            Number(item.discount_amount || 0);
+
+        const total =
+            Number(item.amount || 0);
 
         subtotal += price * item.quantity;
-        totalDiscount += discount * item.quantity;
+        totalDiscount += discount;
 
-        const orderItem = orderItemRepository.create({
-            variant,
-            quantity: item.quantity,
-            price,
-            discount,
-            total,
-        });
+        const orderItem =
+            orderItemRepository.create({
+                variant,
+                quantity: item.quantity,
+                price,
+                discount,
+                total,
+            });
+
 
         orderItems.push(orderItem);
-
     }
 
     // Backend managed values
-    const shipping_amount = 50;
-    const tax = 18;
+    const taxableAmount =
+        subtotal - totalDiscount;
+    const shipping_amount = Number(subClient.shippingAmount || 50);;
+    const taxRate = Number(client.taxRate || 0);
+    const tax =
+        (taxableAmount * taxRate) / 100;
 
     const finalTotal =
-        subtotal -
-        totalDiscount +
-        shipping_amount +
-        tax;
+        taxableAmount +
+        tax +
+        shipping_amount;
 
     const order = orderRepository.create({
         client,
@@ -1338,6 +1343,9 @@ export const updateOrderStatus = async (
             invoiceNumber: await generateInvoiceNumber(),
             order,
             amount: order.totalAmount,
+            tax: order.tax,
+            shipping_amount:
+                order.shipping_amount,
             status: InvoiceStatus.UNPAID,
         });
 

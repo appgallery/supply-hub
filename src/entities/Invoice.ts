@@ -4,7 +4,7 @@ import { InvoiceStatus } from "../utils/constants";
 import { BaseEntity } from "./BaseEntity";
 
 @Entity("invoices")
-export class Invoice extends BaseEntity{
+export class Invoice extends BaseEntity {
     @PrimaryGeneratedColumn()
     invoiceId: number;
 
@@ -20,6 +20,21 @@ export class Invoice extends BaseEntity{
         scale: 2,
     })
     amount: number;
+
+    @Column("decimal", {
+        precision: 12,
+        scale: 2,
+        default: 0,
+    })
+    tax: number;
+
+
+    @Column("decimal", {
+        precision: 12,
+        scale: 2,
+        default: 0,
+    })
+    shipping_amount: number;
 
     @Column({
         default: InvoiceStatus.UNPAID,
