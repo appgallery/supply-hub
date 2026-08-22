@@ -68,7 +68,6 @@ export const exchangeAuthorizationCode = async (
     code: string,
     // state: string
 ) => {
-
     const client = await clientRepository.findOne({
         where: {
             clientId,
@@ -79,11 +78,15 @@ export const exchangeAuthorizationCode = async (
         throw new Error("Client not found.");
     }
 
-    // // Validate state
-    // if (client.razorpayOAuthState !== state) {
+    // // Validate OAuth state
+    // if (
+    //     !client.razorpayOAuthState ||
+    //     client.razorpayOAuthState !== state
+    // ) {
     //     throw new Error("Invalid OAuth state.");
     // }
 
+    // Validate OAuth state expiry
     if (
         !client.razorpayOAuthStateExpiry ||
         client.razorpayOAuthStateExpiry < new Date()
@@ -91,29 +94,50 @@ export const exchangeAuthorizationCode = async (
         throw new Error("OAuth state expired.");
     }
 
-    try {
+    if (!code) {
+        throw new Error("Authorization code is required.");
+    }
 
+    try {
+        // Razorpay authorization codes can be URL encoded
+        const decodedCode = decodeURIComponent(code);
+        console.log("decodedCode",decodedCode)
+        console.log("clientId",clientId)
+        console.log("RAZORPAY_CLIENT_ID",process.env.RAZORPAY_CLIENT_ID)
+        console.log("RAZORPAY_CLIENT_SECRET",process.env.RAZORPAY_CLIENT_SECRET)
+        console.log("RAZORPAY_REDIRECT_URL",process.env.RAZORPAY_REDIRECT_URL)
         const response = await axios.post(
             "https://auth.razorpay.com/token",
             qs.stringify({
                 client_id: process.env.RAZORPAY_CLIENT_ID,
                 client_secret: process.env.RAZORPAY_CLIENT_SECRET,
                 grant_type: "authorization_code",
-                code,
+                code: decodedCode,
                 redirect_uri: process.env.RAZORPAY_REDIRECT_URL,
+               
             }),
             {
                 headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Content-Type":
+                        "application/x-www-form-urlencoded",
                 },
             }
         );
 
         const token = response.data;
 
-        client.razorpayAccessToken = token.access_token;
-        client.razorpayRefreshToken = token.refresh_token;
+        if (!token?.access_token) {
+            throw new Error(
+                "Razorpay did not return an access token."
+            );
+        }
 
+        // Save Razorpay tokens
+        client.razorpayAccessToken = token.access_token;
+        client.razorpayRefreshToken =
+            token.refresh_token ?? null;
+
+        // OAuth state can no longer be reused
         client.razorpayOAuthState = null;
         client.razorpayOAuthStateExpiry = null;
 
@@ -122,15 +146,32 @@ export const exchangeAuthorizationCode = async (
         return {
             connected: true,
         };
-
     } catch (error: any) {
+        const razorpayError = error.response?.data;
 
-        console.log(
+        // Do NOT log the complete Axios error.
+        // It can contain client_secret and authorization code.
+        console.error(
             "Razorpay OAuth Error:",
-            error.response?.data
+            razorpayError || error.message
         );
 
-        throw error;
+        const description =
+            razorpayError?.error?.description;
+
+        if (
+            description ===
+            "Authorization code has expired"
+        ) {
+            throw new Error(
+                "Razorpay authorization code has expired. Please connect Razorpay again."
+            );
+        }
+
+        throw new Error(
+            description ||
+            "Failed to connect Razorpay."
+        );
     }
 };
 
