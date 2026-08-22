@@ -263,12 +263,13 @@ export const createInvoicePayment = async (
             await createPayment(invoiceId);
         return res.status(200).json({
             status: true,
+            meesage:"Payment created successfully",
             data: result
         });
 
     } catch (error: any) {
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message
         });
     }
