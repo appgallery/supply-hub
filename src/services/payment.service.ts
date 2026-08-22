@@ -781,19 +781,14 @@ export const createPayment = async (
     const transaction =
         transactionRepository.create({
             invoice,
-
             razorpayOrderId:
                 razorpayOrder.id,
-
             amount:
                 Number(invoice.amount),
-
             currency:
                 razorpayOrder.currency,
-
             status:
                 TransactionStatus.PENDING,
-
             gateway:
                 "RAZORPAY",
         });
@@ -810,37 +805,26 @@ export const createPayment = async (
     return {
         transactionId:
             savedTransaction.transactionId,
-
         invoiceId:
             invoice.invoiceId,
-
         invoiceNumber:
             invoice.invoiceNumber,
-
         subtotal:
             invoice.order.subtotal,
-
         discount:
             invoice.order.totalDiscount,
-
         tax:
             invoice.tax,
-
         shipping_amount:
             invoice.shipping_amount,
-
         totalAmount:
             invoice.amount,
-
         razorpayOrderId:
             razorpayOrder.id,
-
         amount:
             razorpayOrder.amount,
-
         currency:
             razorpayOrder.currency,
-
         key:
             client.razorpayPublicToken,
     };
@@ -1203,7 +1187,6 @@ const handleOrderPaid = async (payload: any) => {
             ],
         });
 
-
     if (!transaction) {
         console.warn(
             "Transaction not found",
@@ -1211,7 +1194,6 @@ const handleOrderPaid = async (payload: any) => {
         );
         return;
     }
-
 
     const payment =
         payload.payload?.payment?.entity;
@@ -1229,7 +1211,6 @@ const handleOrderPaid = async (payload: any) => {
 
         await transactionRepository.save(transaction);
     }
-
 
     const invoice =
         await invoiceRepository.findOne({

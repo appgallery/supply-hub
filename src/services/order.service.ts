@@ -1304,16 +1304,32 @@ export const updateOrderStatus = async (
         throw new Error("Order not found.");
     }
 
+    if (
+        status === OrderStatus.APPROVED &&
+        order.status !== OrderStatus.PENDING
+    ) {
+        throw new Error("Only pending orders can be approved.");
+    }
 
+    if (
+        status === OrderStatus.REJECTED &&
+        order.status !== OrderStatus.PENDING
+    ) {
+        throw new Error("Only pending orders can be rejected.");
+    }
 
-    if (order.status !== OrderStatus.PENDING) {
+    if (
+        status === OrderStatus.COMPLETED &&
+        order.status !== OrderStatus.PROCESSING
+    ) {
         throw new Error(
-            "Only pending orders can be updated."
+            "Only processing orders can be completed."
         );
     }
     if (
         status !== OrderStatus.APPROVED &&
-        status !== OrderStatus.REJECTED
+        status !== OrderStatus.REJECTED &&
+        status !== OrderStatus.COMPLETED
     ) {
         throw new Error(
             "Invalid order status."
@@ -1377,6 +1393,17 @@ export const updateOrderStatus = async (
             user.userId
         );
     }
+    if (status === OrderStatus.COMPLETED) {
+        order.status = OrderStatus.COMPLETED;
+        order.updated_by = user?.userId;
+        await createActivity(
+            `Order "${order.orderNumber}" completed.`,
+            ActivityType.ORDER_COMPLETED,
+            order.client.clientId,
+            order.subClient.subClientId,
+            user.userId
+        );
+    }
     order.updated_by = user.userId;
     await orderRepository.save(order);
 
@@ -1390,15 +1417,25 @@ export const updateOrderStatus = async (
 
     if (dealerUser?.fcm_token) {
 
-        const title =
-            status === OrderStatus.APPROVED
-                ? "Order Approved"
-                : "Order Rejected";
+        let title = "";
+        let message = "";
 
-        const message =
-            status === OrderStatus.APPROVED
-                ? `Your order ${order.orderNumber} has been approved.`
-                : `Your order ${order.orderNumber} has been rejected.`;
+        switch (status) {
+            case OrderStatus.APPROVED:
+                title = "Order Approved";
+                message = `Your order ${order.orderNumber} has been approved.`;
+                break;
+
+            case OrderStatus.REJECTED:
+                title = "Order Rejected";
+                message = `Your order ${order.orderNumber} has been rejected.`;
+                break;
+
+            case OrderStatus.COMPLETED:
+                title = "Order Completed";
+                message = `Your order ${order.orderNumber} has been completed.`;
+                break;
+        }
 
         await sendPushNotification(
             dealerUser.fcm_token,
