@@ -122,6 +122,7 @@ export class Client extends BaseEntity {
 
   @Column({
     nullable: true,
+    select: false,
   })
   razorpayLinkedAccountId: string;
 
@@ -132,22 +133,26 @@ export class Client extends BaseEntity {
 
   @Column({
     nullable: true,
+    select: false,
   })
   razorpayOAuthState?: string;
 
   @Column({
     type: "timestamp",
     nullable: true,
+    select: false,
   })
   razorpayOAuthStateExpiry?: Date;
 
   @Column({
     nullable: true,
+    select: false,
   })
   razorpayAccessToken: string;
 
   @Column({
     nullable: true,
+    select: false,
   })
   razorpayRefreshToken: string;
   @Column({
@@ -157,6 +162,7 @@ export class Client extends BaseEntity {
 
   @Column({
     nullable: true,
+    select: false,
   })
   razorpayTokenType: string;
 
@@ -168,6 +174,7 @@ export class Client extends BaseEntity {
   @Column({
     type: "timestamp",
     nullable: true,
+    select: false,
   })
   razorpayAccessTokenExpiresAt: Date;
 

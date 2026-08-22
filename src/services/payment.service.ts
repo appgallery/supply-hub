@@ -29,46 +29,6 @@ export const generateRazorpayOAuthUrl = async (
     clientId: number
 ) => {
     const client = await clientRepository.findOne({
-        where: { clientId },
-    });
-
-    if (!client) {
-        throw new Error("Client not found.");
-    }
-
-    // Generate random state
-    const state = crypto.randomBytes(24).toString("hex");
-
-    // Save state in DB
-    client.razorpayOAuthState = state;
-    client.razorpayOAuthStateExpiry = new Date(
-        Date.now() + 10 * 60 * 1000 // 10 minutes
-    );
-
-    await clientRepository.save(client);
-
-    // Generate OAuth URL
-    const params = new URLSearchParams({
-        client_id: process.env.RAZORPAY_CLIENT_ID!,
-        response_type: "code",
-        redirect_uri: process.env.RAZORPAY_REDIRECT_URL!,
-        state,
-    });
-
-    params.append("scope[]", "read_write");
-
-    return {
-        authorizationUrl: `https://auth.razorpay.com/authorize?${params.toString()}`,
-    };
-};
-
-
-export const exchangeAuthorizationCode = async (
-    clientId: number,
-    code: string,
-    // state: string
-) => {
-    const client = await clientRepository.findOne({
         where: {
             clientId,
         },
@@ -78,39 +38,125 @@ export const exchangeAuthorizationCode = async (
         throw new Error("Client not found.");
     }
 
-    // // Validate OAuth state
-    // if (
-    //     !client.razorpayOAuthState ||
-    //     client.razorpayOAuthState !== state
-    // ) {
-    //     throw new Error("Invalid OAuth state.");
-    // }
+    // Generate random OAuth state
+    const state = crypto
+        .randomBytes(24)
+        .toString("hex");
 
-    // Validate OAuth state expiry
-    if (
-        !client.razorpayOAuthStateExpiry ||
-        client.razorpayOAuthStateExpiry < new Date()
-    ) {
-        throw new Error("OAuth state expired.");
-    }
+    client.razorpayOAuthState = state;
+
+    client.razorpayOAuthStateExpiry =
+        new Date(
+            Date.now() + 10 * 60 * 1000
+        );
+
+    await clientRepository.save(client);
+
+    const params = new URLSearchParams({
+        client_id:
+            process.env.RAZORPAY_CLIENT_ID!,
+
+        response_type: "code",
+
+        redirect_uri:
+            process.env.RAZORPAY_REDIRECT_URL!,
+
+        state,
+    });
+
+    params.append(
+        "scope[]",
+        "read_write"
+    );
+
+    return {
+        authorizationUrl:
+            `https://auth.razorpay.com/authorize?${params.toString()}`,
+    };
+};
+
+export const exchangeAuthorizationCode = async (
+    clientId: number,
+    code: string,
+    // state?: string
+) => {
 
     if (!code) {
-        throw new Error("Authorization code is required.");
+        throw new Error(
+            "Authorization code is required."
+        );
+    }
+
+    const client = await clientRepository
+        .createQueryBuilder("client")
+        .addSelect([
+            "client.razorpayOAuthState",
+            "client.razorpayOAuthStateExpiry",
+        ])
+        .where(
+            "client.clientId = :clientId",
+            { clientId }
+        )
+        .getOne();
+
+    if (!client) {
+        throw new Error("Client not found.");
+    }
+
+    // -----------------------------------------
+    // Validate OAuth state
+    // -----------------------------------------
+
+    // if (
+    //     !client.razorpayOAuthState ||
+    //    !state | |
+    //     client.razorpayOAuthState !== state
+    // ) {
+    //     throw new Error(
+    //         "Invalid OAuth state."
+    //     );
+    // }
+
+    // -----------------------------------------
+    // Validate state expiry
+    // -----------------------------------------
+
+    if (
+        !client.razorpayOAuthStateExpiry ||
+        client.razorpayOAuthStateExpiry <= new Date()
+    ) {
+        throw new Error(
+            "OAuth state expired."
+        );
     }
 
     try {
-        // Razorpay authorization codes can be URL encoded
-        const decodedCode = decodeURIComponent(code);
+
+        // Don't decode unless you actually need to.
+        // Express usually gives you the decoded query parameter.
+        const authorizationCode =
+            decodeURIComponent(code);
+
         const response = await axios.post(
             "https://auth.razorpay.com/token",
-            qs.stringify({
-                client_id: process.env.RAZORPAY_CLIENT_ID,
-                client_secret: process.env.RAZORPAY_CLIENT_SECRET,
-                grant_type: "authorization_code",
-                code: decodedCode,
-                redirect_uri: process.env.RAZORPAY_REDIRECT_URL,
 
+            qs.stringify({
+                client_id:
+                    process.env.RAZORPAY_CLIENT_ID,
+
+                client_secret:
+                    process.env.RAZORPAY_CLIENT_SECRET,
+
+                grant_type:
+                    "authorization_code",
+
+                code:
+                    authorizationCode,
+
+                redirect_uri:
+                    process.env.RAZORPAY_REDIRECT_URL,
             }),
+
             {
                 headers: {
                     "Content-Type":
@@ -118,9 +164,12 @@ export const exchangeAuthorizationCode = async (
                 },
             }
         );
-        console.log(response.data)
 
         const token = response.data;
+
+        // -----------------------------------------
+        // Save Razorpay OAuth information
+        // -----------------------------------------
 
         client.razorpayConnected = true;
 
@@ -141,23 +190,31 @@ export const exchangeAuthorizationCode = async (
 
         client.razorpayAccessTokenExpiresAt =
             token.expires_in
-                ? new Date(Date.now() + token.expires_in * 1000)
+                ? new Date(
+                    Date.now() +
+                    Number(token.expires_in) * 1000
+                )
                 : null;
 
+        // -----------------------------------------
+        // Clear OAuth state
+        // -----------------------------------------
+
         client.razorpayOAuthState = null;
+
         client.razorpayOAuthStateExpiry = null;
 
         await clientRepository.save(client);
 
-
         return {
             connected: true,
         };
-    } catch (error: any) {
-        const razorpayError = error.response?.data;
 
-        // Do NOT log the complete Axios error.
-        // It can contain client_secret and authorization code.
+    } catch (error: any) {
+
+        const razorpayError =
+            error.response?.data;
+
         console.error(
             "Razorpay OAuth Error:",
             razorpayError || error.message
@@ -182,10 +239,14 @@ export const exchangeAuthorizationCode = async (
     }
 };
 
+
 export const processWebhook = async (
     body: Buffer,
     signature: string
 ) => {
+    // -----------------------------------------
+    // Verify Razorpay webhook signature
+    // -----------------------------------------
 
     const expectedSignature = crypto
         .createHmac(
@@ -195,99 +256,128 @@ export const processWebhook = async (
         .update(body)
         .digest("hex");
 
-
     if (expectedSignature !== signature) {
         throw new Error("Invalid webhook signature.");
     }
 
-    const payload = JSON.parse(
-        body.toString()
-    );
+    // -----------------------------------------
+    // Parse payload
+    // -----------------------------------------
+
+    let payload: any;
+
+    try {
+        payload = JSON.parse(body.toString());
+    } catch {
+        throw new Error("Invalid webhook payload.");
+    }
 
     const event = payload.event;
+
+    console.log("Razorpay webhook received:", event);
+
+    // -----------------------------------------
+    // Get Razorpay account ID
+    // -----------------------------------------
+
+    const accountId =
+        payload.payload?.account?.entity?.id;
+
+    if (!accountId) {
+        console.warn(
+            "Razorpay webhook account ID missing:",
+            event
+        );
+
+        return true;
+    }
+
+    // -----------------------------------------
+    // Find client
+    // -----------------------------------------
+
+    const client =
+        await clientRepository.findOne({
+            where: {
+                razorpayLinkedAccountId: accountId,
+            },
+        });
+
+    if (!client) {
+        console.warn(
+            `No client found for Razorpay account: ${accountId}`
+        );
+
+        return true;
+    }
+
+    // -----------------------------------------
+    // Update account status
+    // -----------------------------------------
 
     switch (event) {
 
         case "account.instantly_activated":
-            {
-                const accountId =
-                    payload.payload?.account?.entity?.id;
-                if (!accountId) {
-                    throw new Error(
-                        "Razorpay account id missing."
-                    );
-                }
-                const client =
-                    await clientRepository.findOne({
-                        where: {
-                            razorpayLinkedAccountId: accountId,
-                        },
-                    });
-                if (client) {
-                    client.razorpayAccountStatus =
-                        "ACTIVE";
-                    await clientRepository.save(client);
-                }
-                break;
-            }
+
+            client.razorpayAccountStatus =
+                "ACTIVE";
+
+            break;
+
 
         case "account.activated_kyc_pending":
-            {
-                const accountId =
-                    payload.payload?.account?.entity?.id;
-                const client =
-                    await clientRepository.findOne({
-                        where: {
-                            razorpayLinkedAccountId: accountId,
-                        },
-                    });
 
-                if (client) {
-                    client.razorpayAccountStatus =
-                        "KYC_PENDING";
-                    await clientRepository.save(client);
-                }
+            client.razorpayAccountStatus =
+                "KYC_PENDING";
 
-                break;
-            }
+            break;
+
 
         default:
+
             console.log(
                 "Unhandled Razorpay event:",
                 event
             );
+
+            return true;
     }
+
+    await clientRepository.save(client);
+
+    console.log(
+        `Client ${client.clientId} Razorpay status updated to ${client.razorpayAccountStatus}`
+    );
 
     return true;
 };
 
-
 export const fetchRazorpayStatus = async (
     clientId: number
 ) => {
-
     const client = await clientRepository.findOne({
         where: {
             clientId,
         },
         select: {
             clientId: true,
+            razorpayConnected: true,
             razorpayLinkedAccountId: true,
             razorpayAccountStatus: true,
         },
     });
-
 
     if (!client) {
         throw new Error("Client not found.");
     }
 
     return {
-        connected: !!client.razorpayLinkedAccountId,
-        accountId: client.razorpayLinkedAccountId,
+        connected: client.razorpayConnected,
+        accountId: client.razorpayLinkedAccountId ?? null,
         status: client.razorpayAccountStatus,
     };
 };
+
 
 export const removeRazorpayConnection = async (
     clientId: number
@@ -313,42 +403,152 @@ export const removeRazorpayConnection = async (
     return true;
 };
 
-export const getAccessTokenForMerchant = async (accountId: string) => {
-    const client = await clientRepository.findOne({
-        where: { razorpayLinkedAccountId: accountId },
-    });
+export const getAccessTokenForMerchant = async (
+    accountId: string
+) => {
+    const client = await clientRepository
+        .createQueryBuilder("client")
+        .addSelect([
+            "client.razorpayLinkedAccountId",
+            "client.razorpayAccessToken",
+            "client.razorpayRefreshToken",
+            "client.razorpayTokenType",
+            "client.razorpayPublicToken",
+            "client.razorpayAccessTokenExpiresAt",
+        ])
+        .where(
+            "client.razorpayLinkedAccountId = :accountId",
+            { accountId }
+        )
+        .getOne();
 
     if (!client) {
-        throw new Error("No client found for this Razorpay account.");
+        throw new Error(
+            "No client found for this Razorpay account."
+        );
+    }
+
+    if (!client.razorpayConnected) {
+        throw new Error(
+            "Client is not connected to Razorpay."
+        );
     }
 
     if (!client.razorpayAccessToken) {
-        throw new Error("Client has not completed Razorpay OAuth authorization.");
+        throw new Error(
+            "Client has not completed Razorpay OAuth authorization."
+        );
     }
 
     return client;
 };
 
-export const refreshRazorpayAccessToken = async (client: Client) => {
-    const response = await axios.post(
-        "https://auth.razorpay.com/token",
-        {
-            client_id: process.env.RAZORPAY_CLIENT_ID,
-            client_secret: process.env.RAZORPAY_CLIENT_SECRET,
-            grant_type: "refresh_token",
-            refresh_token: client.razorpayRefreshToken,
-        },
-        { headers: { "Content-Type": "application/json" } }
-    );
 
-    const token = response.data;
+export const refreshRazorpayAccessToken = async (
+    client: Client
+) => {
 
-    client.razorpayAccessToken = token.access_token;
-    client.razorpayRefreshToken = token.refresh_token;
-    await clientRepository.save(client);
+    if (!client.razorpayRefreshToken) {
+        throw new Error(
+            "Razorpay refresh token not found."
+        );
+    }
 
-    return client.razorpayAccessToken;
+    try {
+
+        const response = await axios.post(
+            "https://auth.razorpay.com/token",
+            {
+                client_id:
+                    process.env.RAZORPAY_CLIENT_ID,
+
+                client_secret:
+                    process.env.RAZORPAY_CLIENT_SECRET,
+
+                grant_type:
+                    "refresh_token",
+
+                refresh_token:
+                    client.razorpayRefreshToken,
+            },
+            {
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+            }
+        );
+
+        const token = response.data;
+
+        // -----------------------------------------
+        // Save NEW access token
+        // -----------------------------------------
+
+        client.razorpayAccessToken =
+            token.access_token;
+
+        // -----------------------------------------
+        // IMPORTANT:
+        // Razorpay returns a NEW refresh token.
+        // -----------------------------------------
+
+        if (token.refresh_token) {
+            client.razorpayRefreshToken =
+                token.refresh_token;
+        }
+
+        // -----------------------------------------
+        // Save token type
+        // -----------------------------------------
+
+        if (token.token_type) {
+            client.razorpayTokenType =
+                token.token_type;
+        }
+
+        // -----------------------------------------
+        // Save public token if returned
+        // -----------------------------------------
+
+        if (token.public_token) {
+            client.razorpayPublicToken =
+                token.public_token;
+        }
+
+        // -----------------------------------------
+        // Calculate expiry
+        // -----------------------------------------
+
+        if (token.expires_in) {
+            client.razorpayAccessTokenExpiresAt =
+                new Date(
+                    Date.now() +
+                    Number(token.expires_in) * 1000
+                );
+        }
+
+        client.razorpayConnected = true;
+
+        await clientRepository.save(client);
+
+        return client.razorpayAccessToken;
+
+    } catch (error: any) {
+
+        console.error(
+            "Razorpay token refresh error:",
+            error.response?.data ||
+            error.message
+        );
+
+        throw new Error(
+            error.response?.data?.error?.description ||
+            "Failed to refresh Razorpay access token."
+        );
+    }
 };
+
 
 
 export const deleteSubMerchant = async (accountId: string) => {
@@ -390,7 +590,6 @@ export const createPayment = async (
         },
         relations: [
             "order",
-            "order.client",
             "order.subClient",
         ],
     });
@@ -403,7 +602,27 @@ export const createPayment = async (
         throw new Error("Invoice already paid.");
     }
 
-    const client = invoice.order.client;
+    const clientId = invoice.order?.client?.clientId;
+
+    if (!clientId) {
+        throw new Error("Client not found.");
+    }
+
+    // -----------------------------------------
+    // Load client + sensitive Razorpay fields
+    // -----------------------------------------
+
+    const client = await clientRepository
+        .createQueryBuilder("client")
+        .addSelect([
+            "client.razorpayLinkedAccountId",
+            "client.razorpayAccessToken",
+            "client.razorpayAccessTokenExpiresAt",
+        ])
+        .where("client.clientId = :clientId", {
+            clientId,
+        })
+        .getOne();
 
     if (!client) {
         throw new Error("Client not found.");
@@ -434,6 +653,16 @@ export const createPayment = async (
     if (!client.razorpayLinkedAccountId) {
         throw new Error(
             "Client Razorpay account ID not found."
+        );
+    }
+
+    // -----------------------------------------
+    // Check account status
+    // -----------------------------------------
+
+    if (client.razorpayAccountStatus !== "ACTIVE") {
+        throw new Error(
+            "Client Razorpay account is not active."
         );
     }
 
@@ -504,9 +733,7 @@ export const createPayment = async (
         !Number.isFinite(amountInPaise) ||
         amountInPaise <= 0
     ) {
-        throw new Error(
-            "Invalid invoice amount."
-        );
+        throw new Error("Invalid invoice amount.");
     }
 
     // -----------------------------------------
@@ -520,9 +747,7 @@ export const createPayment = async (
             "https://api.razorpay.com/v1/orders",
             {
                 amount: amountInPaise,
-
                 currency: "INR",
-
                 receipt: invoice.invoiceNumber,
 
                 notes: {
@@ -544,15 +769,12 @@ export const createPayment = async (
             }
         );
 
-        razorpayOrder =
-            razorpayResponse.data;
+        razorpayOrder = razorpayResponse.data;
 
     } catch (error: any) {
-
         console.error(
             "Razorpay Order Creation Error:",
-            error.response?.data ||
-            error.message
+            error.response?.data || error.message
         );
 
         throw new Error(
@@ -591,7 +813,7 @@ export const createPayment = async (
         );
 
     // -----------------------------------------
-    // Return checkout information
+    // Return Checkout information
     // -----------------------------------------
 
     return {
@@ -617,6 +839,7 @@ export const createPayment = async (
             client.razorpayPublicToken,
     };
 };
+
 
 export const verifyRazorpayPayment = async (
     payload: {
