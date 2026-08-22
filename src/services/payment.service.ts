@@ -155,6 +155,8 @@ export const exchangeAuthorizationCode = async (
 
                 redirect_uri:
                     process.env.RAZORPAY_REDIRECT_URL,
+
+                mode: "test"
             }),
 
             {
@@ -604,7 +606,6 @@ export const createPayment = async (
     }
 
     const clientId = invoice.order?.client?.clientId;
-    console.log("clientId",clientId)
 
     if (!clientId) {
         throw new Error("Client not found.");
