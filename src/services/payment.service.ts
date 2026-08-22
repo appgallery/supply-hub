@@ -246,110 +246,102 @@ export const processWebhook = async (
     body: Buffer,
     signature: string
 ) => {
+
     // -----------------------------------------
-    // Verify Razorpay webhook signature
+    // Verify Signature
     // -----------------------------------------
 
-    const expectedSignature = crypto
-        .createHmac(
-            "sha256",
-            process.env.RAZORPAY_WEBHOOK_SECRET!
-        )
-        .update(body)
-        .digest("hex");
+    const expectedSignature =
+        crypto
+            .createHmac(
+                "sha256",
+                process.env.RAZORPAY_WEBHOOK_SECRET!
+            )
+            .update(body)
+            .digest("hex");
+
 
     if (expectedSignature !== signature) {
-        throw new Error("Invalid webhook signature.");
+        throw new Error(
+            "Invalid webhook signature."
+        );
     }
 
+
     // -----------------------------------------
-    // Parse payload
+    // Parse Payload
     // -----------------------------------------
 
-    let payload: any;
+    const payload = JSON.parse(
+        body.toString()
+    );
 
-    try {
-        payload = JSON.parse(body.toString());
-    } catch {
-        throw new Error("Invalid webhook payload.");
-    }
 
     const event = payload.event;
 
-    console.log("Razorpay webhook received:", event);
+    console.log(
+        "Razorpay webhook received:",
+        event
+    );
 
-    // -----------------------------------------
-    // Get Razorpay account ID
-    // -----------------------------------------
-
-    const accountId =
-        payload.payload?.account?.entity?.id;
-
-    if (!accountId) {
-        console.warn(
-            "Razorpay webhook account ID missing:",
-            event
-        );
-
-        return true;
-    }
-
-    // -----------------------------------------
-    // Find client
-    // -----------------------------------------
-
-    const client =
-        await clientRepository.findOne({
-            where: {
-                razorpayLinkedAccountId: accountId,
-            },
-        });
-
-    if (!client) {
-        console.warn(
-            `No client found for Razorpay account: ${accountId}`
-        );
-
-        return true;
-    }
-
-    // -----------------------------------------
-    // Update account status
-    // -----------------------------------------
 
     switch (event) {
 
+
+        // =====================================
+        // ACCOUNT EVENTS
+        // =====================================
+
         case "account.instantly_activated":
-
-            client.razorpayAccountStatus =
-                "ACTIVE";
-
-            break;
-
-
         case "account.activated_kyc_pending":
 
-            client.razorpayAccountStatus =
-                "KYC_PENDING";
+            await handleAccountEvent(
+                payload
+            );
 
             break;
+
+
+
+        // =====================================
+        // PAYMENT EVENTS
+        // =====================================
+
+        case "payment.authorized":
+        case "payment.captured":
+        case "payment.failed":
+
+            await handlePaymentEvent(
+                payload,
+                event
+            );
+
+            break;
+
+
+
+        // =====================================
+        // ORDER EVENTS
+        // =====================================
+
+        case "order.paid":
+
+            await handleOrderPaid(
+                payload
+            );
+
+            break;
+
 
 
         default:
 
             console.log(
-                "Unhandled Razorpay event:",
+                "Unhandled event:",
                 event
             );
-
-            return true;
     }
 
-    await clientRepository.save(client);
-
-    console.log(
-        `Client ${client.clientId} Razorpay status updated to ${client.razorpayAccountStatus}`
-    );
 
     return true;
 };
@@ -1069,4 +1061,215 @@ export const getPaymentDetails = async (
         createdAt: transaction.createdAt,
         updatedAt: transaction.updatedAt,
     };
+};
+
+const handleAccountEvent = async (
+    payload: any
+) => {
+
+    const accountId =
+        payload.payload
+            ?.account
+            ?.entity
+            ?.id;
+
+    if (!accountId) {
+        console.warn(
+            "Account id missing"
+        );
+        return;
+    }
+
+    const client =
+        await clientRepository.findOne({
+            where: {
+                razorpayLinkedAccountId:
+                    accountId
+            }
+        });
+
+    if (!client) {
+        console.warn(
+            "Client not found:",
+            accountId
+        );
+        return;
+    }
+
+    switch (payload.event) {
+
+        case "account.instantly_activated":
+
+            client.razorpayAccountStatus =
+                "ACTIVE";
+
+            break;
+
+        case "account.activated_kyc_pending":
+
+            client.razorpayAccountStatus =
+                "KYC_PENDING";
+
+            break;
+    }
+
+    await clientRepository.save(client);
+
+};
+
+const handlePaymentEvent = async (
+    payload: any,
+    event: string
+) => {
+
+    const payment =
+        payload.payload
+            ?.payment
+            ?.entity;
+
+    if (!payment) {
+        return;
+    }
+
+    const orderId =
+        payment.order_id;
+
+    const transaction =
+        await transactionRepository.findOne({
+            where: {
+                razorpayOrderId:
+                    orderId
+            }
+        });
+
+    if (!transaction) {
+        console.warn(
+            "Transaction not found:",
+            orderId
+        );
+        return;
+    }
+
+    transaction.razorpayPaymentId =
+        payment.id;
+
+    if (event === "payment.captured") {
+
+        transaction.status =
+            TransactionStatus.SUCCESS;
+    }
+
+    if (event === "payment.failed") {
+
+        transaction.status =
+            TransactionStatus.FAILED;
+    }
+
+    await transactionRepository.save(
+        transaction
+    );
+
+};
+
+const handleOrderPaid = async (
+    payload: any
+) => {
+    const razorpayOrder =
+        payload.payload?.order?.entity;
+
+
+    if (!razorpayOrder) {
+        return;
+    }
+
+
+    const transaction =
+        await transactionRepository.findOne({
+            where: {
+                razorpayOrderId:
+                    razorpayOrder.id
+            },
+            relations: [
+                "invoice",
+                "invoice.order"
+            ]
+        });
+
+    if (!transaction) {
+        console.warn(
+            "Transaction not found",
+            razorpayOrder.id
+        );
+
+        return;
+    }
+    // prevent duplicate webhook
+    if (
+        transaction.status ===
+        TransactionStatus.SUCCESS
+    ) {
+        return;
+    }
+
+    const payment =
+        payload.payload?.payment?.entity;
+
+    transaction.razorpayPaymentId =
+        payment?.id;
+
+    transaction.status =
+        TransactionStatus.SUCCESS;
+
+    await transactionRepository.save(
+        transaction
+    );
+
+    const invoice =
+        transaction.invoice;
+
+    invoice.status =
+        InvoiceStatus.PAID;
+
+    await invoiceRepository.save(
+        invoice
+    );
+
+    const order =
+        invoice.order;
+
+    order.status =
+        OrderStatus.PROCESSING;
+
+
+    await orderRepository.save(
+        order
+    );
+
+    // Reduce stock only once
+    const orderDetails =
+        await orderRepository.findOne({
+            where: {
+                orderId:
+                    order.orderId
+            },
+            relations: [
+                "items",
+                "items.variant"
+            ]
+        });
+
+    if (orderDetails) {
+
+        for (
+            const item of orderDetails.items
+        ) {
+            item.variant.stock -=
+                item.quantity;
+
+            await variantRepository.save(
+                item.variant
+            );
+        }
+    }
+
 };
