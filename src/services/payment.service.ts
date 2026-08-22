@@ -101,11 +101,6 @@ export const exchangeAuthorizationCode = async (
     try {
         // Razorpay authorization codes can be URL encoded
         const decodedCode = decodeURIComponent(code);
-        console.log("decodedCode",decodedCode)
-        console.log("clientId",clientId)
-        console.log("RAZORPAY_CLIENT_ID",process.env.RAZORPAY_CLIENT_ID)
-        console.log("RAZORPAY_CLIENT_SECRET",process.env.RAZORPAY_CLIENT_SECRET)
-        console.log("RAZORPAY_REDIRECT_URL",process.env.RAZORPAY_REDIRECT_URL)
         const response = await axios.post(
             "https://auth.razorpay.com/token",
             qs.stringify({
@@ -123,6 +118,7 @@ export const exchangeAuthorizationCode = async (
                 },
             }
         );
+        console.log(response.data)
 
         const token = response.data;
 
