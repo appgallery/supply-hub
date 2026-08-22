@@ -52,6 +52,8 @@ export const login = async (body: any) => {
             role: user.role.name,
             clientId: user.client?.clientId,
             subClientId: user.subClient?.subClientId,
+            razorpayConnected:
+                user.client?.razorpayConnected ?? false,
         },
     };
 };

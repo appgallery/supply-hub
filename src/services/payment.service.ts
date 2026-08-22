@@ -22,8 +22,8 @@ const orderRepository = AppDataSource.getRepository(Order);
 const transactionRepository = AppDataSource.getRepository(Transaction);
 const invoiceRepository = AppDataSource.getRepository(Invoice);
 const userRepository = AppDataSource.getRepository(User);
-const clientRepository = AppDataSource.getRepository(Client)
-const variantRepository = AppDataSource.getRepository(Variant)
+const clientRepository = AppDataSource.getRepository(Client);
+const variantRepository = AppDataSource.getRepository(Variant);
 
 export const generateRazorpayOAuthUrl = async (
     clientId: number
@@ -109,7 +109,7 @@ export const exchangeAuthorizationCode = async (
                 grant_type: "authorization_code",
                 code: decodedCode,
                 redirect_uri: process.env.RAZORPAY_REDIRECT_URL,
-               
+
             }),
             {
                 headers: {
@@ -122,22 +122,33 @@ export const exchangeAuthorizationCode = async (
 
         const token = response.data;
 
-        if (!token?.access_token) {
-            throw new Error(
-                "Razorpay did not return an access token."
-            );
-        }
+        client.razorpayConnected = true;
 
-        // Save Razorpay tokens
-        client.razorpayAccessToken = token.access_token;
+        client.razorpayTokenType =
+            token.token_type ?? "Bearer";
+
+        client.razorpayAccessToken =
+            token.access_token;
+
+        client.razorpayPublicToken =
+            token.public_token ?? null;
+
         client.razorpayRefreshToken =
             token.refresh_token ?? null;
 
-        // OAuth state can no longer be reused
+        client.razorpayLinkedAccountId =
+            token.razorpay_account_id ?? null;
+
+        client.razorpayAccessTokenExpiresAt =
+            token.expires_in
+                ? new Date(Date.now() + token.expires_in * 1000)
+                : null;
+
         client.razorpayOAuthState = null;
         client.razorpayOAuthStateExpiry = null;
 
         await clientRepository.save(client);
+
 
         return {
             connected: true,
