@@ -384,7 +384,6 @@ export const deleteSubMerchant = async (accountId: string) => {
 export const createPayment = async (
     invoiceId: number
 ) => {
-
     const invoice = await invoiceRepository.findOne({
         where: {
             invoiceId,
@@ -397,34 +396,64 @@ export const createPayment = async (
     });
 
     if (!invoice) {
-        throw new Error(
-            "Invoice not found."
-        );
+        throw new Error("Invoice not found.");
     }
 
     if (invoice.status === InvoiceStatus.PAID) {
-        throw new Error(
-            "Invoice already paid."
-        );
+        throw new Error("Invoice already paid.");
     }
 
-    const client =
-        invoice.order.client;
+    const client = invoice.order.client;
 
     if (!client) {
-        throw new Error(
-            "Client not found."
-        );
+        throw new Error("Client not found.");
     }
 
-    // Client must be connected with Razorpay Partner
-    if (!client.razorpayLinkedAccountId) {
+    // -----------------------------------------
+    // Razorpay connection validation
+    // -----------------------------------------
+
+    if (!client.razorpayConnected) {
         throw new Error(
             "Client Razorpay account is not connected."
         );
     }
 
-    // Prevent duplicate payment order creation
+    if (!client.razorpayAccessToken) {
+        throw new Error(
+            "Client Razorpay access token not found."
+        );
+    }
+
+    if (!client.razorpayPublicToken) {
+        throw new Error(
+            "Client Razorpay public token not found."
+        );
+    }
+
+    if (!client.razorpayLinkedAccountId) {
+        throw new Error(
+            "Client Razorpay account ID not found."
+        );
+    }
+
+    // -----------------------------------------
+    // Check access-token expiry
+    // -----------------------------------------
+
+    if (
+        client.razorpayAccessTokenExpiresAt &&
+        client.razorpayAccessTokenExpiresAt <= new Date()
+    ) {
+        throw new Error(
+            "Razorpay access token expired."
+        );
+    }
+
+    // -----------------------------------------
+    // Prevent duplicate pending transaction
+    // -----------------------------------------
+
     const existingTransaction =
         await transactionRepository.findOne({
             where: {
@@ -433,63 +462,125 @@ export const createPayment = async (
                 },
                 status: TransactionStatus.PENDING,
             },
-            relations: [
-                "invoice",
-            ],
+            relations: ["invoice"],
         });
 
     if (existingTransaction) {
         return {
             transactionId:
                 existingTransaction.transactionId,
+
+            invoiceId:
+                invoice.invoiceId,
+
+            invoiceNumber:
+                invoice.invoiceNumber,
+
             razorpayOrderId:
                 existingTransaction.razorpayOrderId,
-            amount:
-                Number(existingTransaction.amount) * 100,
-            currency:
-                existingTransaction.currency,
-            key:
-                process.env.RAZORPAY_KEY_ID,
-        };
-    }
-    // Create Razorpay Order
-
-    const razorpayOrder =
-        await razorpay.orders.create({
 
             amount:
                 Math.round(
-                    Number(invoice.amount) * 100
+                    Number(existingTransaction.amount) * 100
                 ),
 
             currency:
-                "INR",
+                existingTransaction.currency,
 
-            receipt:
-                invoice.invoiceNumber,
+            key:
+                client.razorpayPublicToken,
+        };
+    }
 
-            notes: {
-                invoiceId:
-                    invoice.invoiceId.toString(),
+    // -----------------------------------------
+    // Validate amount
+    // -----------------------------------------
 
-                clientId:
-                    client.clientId.toString(),
+    const amountInPaise = Math.round(
+        Number(invoice.amount) * 100
+    );
+
+    if (
+        !Number.isFinite(amountInPaise) ||
+        amountInPaise <= 0
+    ) {
+        throw new Error(
+            "Invalid invoice amount."
+        );
+    }
+
+    // -----------------------------------------
+    // Create Razorpay Order
+    // -----------------------------------------
+
+    let razorpayOrder;
+
+    try {
+        const razorpayResponse = await axios.post(
+            "https://api.razorpay.com/v1/orders",
+            {
+                amount: amountInPaise,
+
+                currency: "INR",
+
+                receipt: invoice.invoiceNumber,
+
+                notes: {
+                    invoiceId:
+                        invoice.invoiceId.toString(),
+
+                    clientId:
+                        client.clientId.toString(),
+                },
+            },
+            {
+                headers: {
+                    Authorization:
+                        `Bearer ${client.razorpayAccessToken}`,
+
+                    "Content-Type":
+                        "application/json",
+                },
             }
-        });
+        );
 
-    // Create Transaction
+        razorpayOrder =
+            razorpayResponse.data;
+
+    } catch (error: any) {
+
+        console.error(
+            "Razorpay Order Creation Error:",
+            error.response?.data ||
+            error.message
+        );
+
+        throw new Error(
+            error.response?.data?.error?.description ||
+            "Failed to create Razorpay order."
+        );
+    }
+
+    // -----------------------------------------
+    // Save Transaction
+    // -----------------------------------------
 
     const transaction =
         transactionRepository.create({
             invoice,
+
             razorpayOrderId:
                 razorpayOrder.id,
+
             amount:
                 Number(invoice.amount),
+
             currency:
                 razorpayOrder.currency,
+
             status:
                 TransactionStatus.PENDING,
+
             gateway:
                 "RAZORPAY",
         });
@@ -499,21 +590,31 @@ export const createPayment = async (
             transaction
         );
 
+    // -----------------------------------------
+    // Return checkout information
+    // -----------------------------------------
+
     return {
         transactionId:
             savedTransaction.transactionId,
+
         invoiceId:
             invoice.invoiceId,
+
         invoiceNumber:
             invoice.invoiceNumber,
+
         razorpayOrderId:
             razorpayOrder.id,
+
         amount:
             razorpayOrder.amount,
+
         currency:
             razorpayOrder.currency,
+
         key:
-            process.env.RAZORPAY_KEY_ID,
+            client.razorpayPublicToken,
     };
 };
 
@@ -534,11 +635,9 @@ export const verifyRazorpayPayment = async (
 
     const transaction =
         await transactionRepository.findOne({
-
             where: {
                 transactionId,
             },
-
             relations: [
                 "invoice",
                 "invoice.order",
@@ -562,32 +661,55 @@ export const verifyRazorpayPayment = async (
         );
     }
 
-    // Verify Razorpay Signature
+    // -----------------------------------------
+    // Verify that this is OUR Razorpay Order
+    // -----------------------------------------
+
+    if (
+        transaction.razorpayOrderId !==
+        razorpayOrderId
+    ) {
+        throw new Error(
+            "Invalid Razorpay order ID."
+        );
+    }
+
+    // -----------------------------------------
+    // Verify Razorpay Payment Signature
+    // -----------------------------------------
+
     const generatedSignature =
         crypto
             .createHmac(
                 "sha256",
-                process.env.RAZORPAY_KEY_SECRET!
+                process.env.RAZORPAY_CLIENT_SECRET!
             )
             .update(
-                `${razorpayOrderId}|${razorpayPaymentId}`
+                `${transaction.razorpayOrderId}|${razorpayPaymentId}`
             )
             .digest("hex");
 
     if (
-        generatedSignature !==
-        razorpaySignature
+        !crypto.timingSafeEqual(
+            Buffer.from(generatedSignature, "utf8"),
+            Buffer.from(razorpaySignature, "utf8")
+        )
     ) {
         throw new Error(
             "Invalid payment signature."
         );
     }
 
+    // -----------------------------------------
     // Update transaction
+    // -----------------------------------------
+
     transaction.razorpayPaymentId =
         razorpayPaymentId;
+
     transaction.razorpaySignature =
         razorpaySignature;
+
     transaction.status =
         TransactionStatus.SUCCESS;
 
@@ -595,25 +717,38 @@ export const verifyRazorpayPayment = async (
         transaction
     );
 
+    // -----------------------------------------
     // Update invoice
+    // -----------------------------------------
+
     const invoice =
         transaction.invoice;
+
     invoice.status =
         InvoiceStatus.PAID;
 
     await invoiceRepository.save(
         invoice
     );
+
+    // -----------------------------------------
     // Update order
+    // -----------------------------------------
+
     const order =
         invoice.order;
+
     order.status =
         OrderStatus.PROCESSING;
+
     await orderRepository.save(
         order
     );
 
-    // Reduce stock after payment
+    // -----------------------------------------
+    // Reduce stock
+    // -----------------------------------------
+
     const orderDetails =
         await orderRepository.findOne({
             where: {
@@ -631,6 +766,7 @@ export const verifyRazorpayPayment = async (
         ) {
             item.variant.stock -=
                 item.quantity;
+
             await variantRepository.save(
                 item.variant
             );
@@ -640,10 +776,13 @@ export const verifyRazorpayPayment = async (
     return {
         transactionId:
             transaction.transactionId,
+
         invoiceId:
             invoice.invoiceId,
+
         orderId:
             order.orderId,
+
         status:
             transaction.status,
     };
