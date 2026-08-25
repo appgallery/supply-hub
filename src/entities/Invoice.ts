@@ -1,7 +1,8 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 import { Order } from "./Order";
 import { InvoiceStatus } from "../utils/constants";
 import { BaseEntity } from "./BaseEntity";
+import { Transaction } from "./Transaction";
 
 @Entity("invoices")
 export class Invoice extends BaseEntity {
@@ -48,4 +49,7 @@ export class Invoice extends BaseEntity {
 
     @CreateDateColumn()
     created_at: Date;
+
+    @OneToMany(() => Transaction, transaction => transaction.invoice)
+    transactions: Transaction[];
 }
