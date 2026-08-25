@@ -339,7 +339,7 @@ export const getOrders = async (
     }
     if (paymentStatus) {
         qb.andWhere(
-            "transaction.status = :paymentStatus",
+            "order.payment_status = :paymentStatus",
             {
                 paymentStatus,
             }
