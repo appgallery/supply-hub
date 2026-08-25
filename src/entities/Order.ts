@@ -7,6 +7,7 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     JoinColumn,
+    OneToOne,
 } from "typeorm";
 
 import { Client } from "./Client";
@@ -15,6 +16,7 @@ import { OrderItem } from "./OrderItem";
 import { OrderStatus, PaymentMethod, PaymentStatus } from "../utils/constants";
 import { User } from "./User";
 import { Address } from "./Address";
+import { Invoice } from "./Invoice";
 
 
 @Entity("orders")
@@ -131,10 +133,13 @@ export class Order {
     })
     payment_method: PaymentMethod;
 
-        @Column({
+    @Column({
         nullable: true,
     })
     paymentNotes: string;
+
+    @OneToOne(() => Invoice, invoice => invoice.order)
+    invoice: Invoice;
 
     @OneToMany(() => OrderItem, (item) => item.order, {
         cascade: true,
