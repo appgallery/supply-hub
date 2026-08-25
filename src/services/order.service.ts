@@ -244,7 +244,9 @@ export const getOrders = async (
         search,
         status,
         subClientId,
+        paymentStatus
     } = query;
+
     const user = await userRepository.findOne({
         where: {
             userId,
@@ -255,19 +257,44 @@ export const getOrders = async (
             "subClient.client",
         ],
     });
+
     if (!user) {
         throw new Error("User not found.");
     }
-    const where: any = {};
+
+    const qb = orderRepository
+        .createQueryBuilder("order")
+        .leftJoinAndSelect("order.client", "client")
+        .leftJoinAndSelect("order.subClient", "subClient")
+        .leftJoinAndSelect("order.shippingAddress", "shippingAddress")
+        .leftJoinAndSelect("order.billingAddress", "billingAddress")
+        .leftJoinAndSelect("order.items", "items")
+        .leftJoinAndSelect("items.variant", "variant")
+        .leftJoinAndSelect("variant.product", "product")
+        .leftJoinAndSelect("variant.color", "color")
+        .leftJoinAndSelect("variant.size", "size")
+        .leftJoinAndSelect("variant.variantImages", "variantImages")
+        .leftJoinAndSelect("order.invoice", "invoice")
+        .leftJoinAndSelect("invoice.transactions", "transaction");
+
+
     // Client can see all dealer orders
     if (user.client) {
-        where.client = {
-            clientId: user.client.clientId,
-        };
+
+        qb.andWhere(
+            "client.clientId = :clientId",
+            {
+                clientId: user.client.clientId
+            }
+        );
+
         if (subClientId) {
-            where.subClient = {
-                subClientId: Number(subClientId),
-            };
+            qb.andWhere(
+                "subClient.subClientId = :subClientId",
+                {
+                    subClientId: Number(subClientId)
+                }
+            );
         }
 
     }
@@ -275,38 +302,63 @@ export const getOrders = async (
     // Dealer can see only own orders
     else if (user.subClient) {
 
-        where.subClient = {
-            subClientId: user.subClient.subClientId,
-        };
-
+        qb.andWhere(
+            "subClient.subClientId = :subClientId",
+            {
+                subClientId: user.subClient.subClientId
+            }
+        );
     }
 
+
+    // Search by order number OR client name OR product name
     if (search) {
-        where.orderNumber = Like(`%${search}%`);
+
+        qb.andWhere(
+            `
+            (
+                client.clientName ILIKE :search
+                OR product.productName ILIKE :search
+            )
+            `,
+            {
+                search: `%${search}%`
+            }
+        );
+
     }
+
+
     if (status) {
-        where.status = status;
+        qb.andWhere(
+            "order.status = :status",
+            {
+                status
+            }
+        );
     }
-    const [orders, total] = await orderRepository.findAndCount({
-        where,
-        relations: [
-            "client",
-            "subClient",
-            "shippingAddress",
-            "billingAddress",
-            "items",
-            "items.variant",
-            "items.variant.product",
-            "items.variant.color",
-            "items.variant.size",
-            "items.variant.variantImages"
-        ],
-        order: {
-            created_at: "DESC",
-        },
-        skip: Number(offset),
-        take: Number(limit),
-    });
+    if (paymentStatus) {
+        qb.andWhere(
+            "transaction.status = :paymentStatus",
+            {
+                paymentStatus,
+            }
+        );
+    }
+
+
+    qb.orderBy(
+        "order.created_at",
+        "DESC"
+    );
+
+
+    qb.skip(Number(offset))
+        .take(Number(limit));
+
+
+    const [orders, total] = await qb.getManyAndCount();
+
 
     return {
         total,
