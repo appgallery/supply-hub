@@ -317,7 +317,7 @@ export const getOrders = async (
         qb.andWhere(
             `
             (
-                client.clientName ILIKE :search
+                client.companyName ILIKE :search
                 OR product.productName ILIKE :search
             )
             `,
