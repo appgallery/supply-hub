@@ -28,12 +28,13 @@ export const createCategoryController = async (
 };
 
 export const getCategoriesController = async (
-    req: Request,
+    req: AuthRequest,
     res: Response
 ) => {
     try {
 
-        const data = await getCategories();
+        const user = req.user;
+        const data = await getCategories(user?.clientId);
 
         return res.status(200).json({
             status: true,

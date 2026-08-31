@@ -103,9 +103,14 @@ export const createCategory = async (
         data: category,
     };
 };
-export const getCategories = async () => {
+export const getCategories = async (clientId: number) => {
 
     return await categoryRepository.find({
+        where: {
+            client: {
+                clientId: clientId,
+            },
+        },
         relations: ["client"],
         order: {
             categoryId: "DESC",
