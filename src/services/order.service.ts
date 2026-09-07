@@ -561,6 +561,7 @@ export const getOrderById = async (
             "billingAddress",
             "items",
             "items.variant",
+            "items.variant.variantImages",
             "items.variant.product",
             "items.variant.color",
             "items.variant.size",
@@ -575,7 +576,13 @@ export const getOrderById = async (
     }
 
 
-    return order;
+    return {
+        ...order,
+        items: order.items.map((item) => ({
+            ...item,
+            discounted_price: item.variant.discounted_price,
+        })),
+    };
 };
 
 export const deleteOrder = async (
