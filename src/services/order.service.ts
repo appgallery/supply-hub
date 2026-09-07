@@ -29,6 +29,7 @@ export const cartItemRepository = AppDataSource.getRepository(CartItem);
 export const addressRepository = AppDataSource.getRepository(Address);
 export const invoiceRepository = AppDataSource.getRepository(Invoice);
 
+
 export const createOrder = async (
     body: any,
     userId: number
@@ -62,7 +63,9 @@ export const createOrder = async (
     }
 
     if (!user.subClient) {
-        throw new Error("Only sub client can place an order.");
+        throw new Error(
+            "Only sub client can place an order."
+        );
     }
 
     const subClient = user.subClient;
@@ -90,115 +93,242 @@ export const createOrder = async (
         throw new Error("Cart not found.");
     }
 
-    if (cart.cartItems.length === 0) {
+    if (!cart.cartItems || cart.cartItems.length === 0) {
         throw new Error("Cart is empty.");
     }
 
-    const shippingAddress = await addressRepository.findOne({
-        where: {
-            addressId: shippingAddressId,
-            subClientId: subClient.subClientId,
-        },
-    });
+    // --------------------------------
+    // 4. Get shipping address
+    // --------------------------------
+
+    const shippingAddress =
+        await addressRepository.findOne({
+            where: {
+                addressId: shippingAddressId,
+                subClientId: subClient.subClientId,
+            },
+        });
 
     if (!shippingAddress) {
-        throw new Error("Shipping address not found.");
+        throw new Error(
+            "Shipping address not found."
+        );
     }
 
-    const billingAddress = await addressRepository.findOne({
-        where: {
-            subClientId: subClient.subClientId,
-            addressType: AddressType.BILLING,
-        },
-    });
+    // --------------------------------
+    // 5. Get billing address
+    // --------------------------------
+
+    const billingAddress =
+        await addressRepository.findOne({
+            where: {
+                subClientId: subClient.subClientId,
+                addressType: AddressType.BILLING,
+            },
+        });
 
     if (!billingAddress) {
-        throw new Error("Billing address not found.");
+        throw new Error(
+            "Billing address not found."
+        );
     }
+
+    // --------------------------------
+    // 6. Initialize totals
+    // --------------------------------
 
     let subtotal = 0;
     let totalDiscount = 0;
 
     const orderItems: OrderItem[] = [];
 
+    // --------------------------------
+    // 7. Create order items
+    // --------------------------------
 
     for (const item of cart.cartItems) {
 
         const variant = item.variant;
 
         if (!variant || !variant.is_active) {
-            throw new Error("Variant not found.");
+            throw new Error(
+                "Variant not found or inactive."
+            );
         }
 
         if (item.quantity <= 0) {
-            throw new Error("Quantity should be greater than zero.");
+            throw new Error(
+                "Quantity should be greater than zero."
+            );
         }
 
+        // Check stock again before creating order
         if (variant.stock < item.quantity) {
             throw new Error(
                 `${variant.name} has only ${variant.stock} items available.`
             );
         }
 
-        const price = Number(item.price);
+        const price = Number(variant.price);
 
-        const discount =
-            Number(item.discount_amount || 0);
+        const discountPercentage =
+            Number(
+                variant.discount_percentage || 0
+            );
 
-        const total =
-            Number(item.amount || 0);
+        // --------------------------------
+        // Use SAME calculation as addToCart
+        // --------------------------------
 
-        subtotal += price * item.quantity;
-        totalDiscount += discount;
+        const {
+            subtotal: itemSubtotal,
+            discount: itemDiscount,
+            total: itemTotal,
+        } = calculateItemAmounts(
+            price,
+            item.quantity,
+            discountPercentage
+        );
+
+        // --------------------------------
+        // Add to order totals
+        // --------------------------------
+
+        subtotal = roundMoney(
+            subtotal + itemSubtotal
+        );
+
+        totalDiscount = roundMoney(
+            totalDiscount + itemDiscount
+        );
+
+        // --------------------------------
+        // Create order item
+        // --------------------------------
 
         const orderItem =
             orderItemRepository.create({
                 variant,
                 quantity: item.quantity,
                 price,
-                discount,
-                total,
+                discount: itemDiscount,
+                total: itemTotal,
             });
-
 
         orderItems.push(orderItem);
     }
 
-    // Backend managed values
-    const taxableAmount =
-        subtotal - totalDiscount;
-    const shipping_amount = Number(subClient.shippingAmount || 50);;
-    const taxRate = Number(client.taxRate || 0);
-    const tax =
-        (taxableAmount * taxRate) / 100;
+    // --------------------------------
+    // 8. Calculate taxable amount
+    // --------------------------------
 
-    const finalTotal =
+    const taxableAmount = roundMoney(
+        subtotal - totalDiscount
+    );
+
+    // --------------------------------
+    // 9. Calculate shipping
+    // --------------------------------
+
+    const shipping_amount = roundMoney(
+        Number(
+            subClient.shippingAmount ?? 50
+        )
+    );
+
+    // --------------------------------
+    // 10. Calculate tax
+    // --------------------------------
+
+    const taxRate = Number(
+        client.taxRate ?? 0
+    );
+
+    const tax = roundMoney(
+        (taxableAmount * taxRate) / 100
+    );
+
+    // --------------------------------
+    // 11. Calculate final order total
+    // --------------------------------
+
+    const finalTotal = roundMoney(
         taxableAmount +
         tax +
-        shipping_amount;
+        shipping_amount
+    );
+
+    // --------------------------------
+    // 12. Create order
+    // --------------------------------
 
     const order = orderRepository.create({
         client,
         subClient,
+
         subtotal,
+
         totalDiscount,
+
         shipping_amount,
+
         tax,
+
         totalAmount: finalTotal,
+
         shippingAddress,
+
         billingAddress,
+
         created_by: user.userId,
     });
 
-    const savedOrder = await orderRepository.save(order);
+    // --------------------------------
+    // 13. Save order
+    // --------------------------------
 
-    savedOrder.orderNumber = `ORD${savedOrder.orderId
-        .toString()
-        .padStart(6, "0")}`;
+    const savedOrder =
+        await orderRepository.save(order);
 
-    await orderRepository.save(savedOrder);
+    // --------------------------------
+    // 14. Generate order number
+    // --------------------------------
 
-    const fullName = `${user.firstName} ${user.lastName}`;
+    savedOrder.orderNumber =
+        `ORD${savedOrder.orderId
+            .toString()
+            .padStart(6, "0")}`;
+
+    await orderRepository.save(
+        savedOrder
+    );
+
+    // --------------------------------
+    // 15. Attach order to order items
+    // --------------------------------
+
+    for (const item of orderItems) {
+        item.order = savedOrder;
+    }
+
+    await orderItemRepository.save(
+        orderItems
+    );
+
+    // --------------------------------
+    // 16. Empty cart
+    // --------------------------------
+
+    await cartItemRepository.delete({
+        cart_id: cart.cartId,
+    });
+
+    // --------------------------------
+    // 16. Create activity
+    // --------------------------------
+
+    const fullName =
+        `${user.firstName} ${user.lastName}`.trim();
 
     await createActivity(
         `Order "${savedOrder.orderNumber}" has been placed by Dealer "${subClient.companyName}" (${fullName}).`,
@@ -208,31 +338,35 @@ export const createOrder = async (
         user.userId
     );
 
-    for (const item of orderItems) {
-        item.order = savedOrder;
-    }
+    // --------------------------------
+    // 17. Get complete order
+    // --------------------------------
 
-    await orderItemRepository.save(orderItems);
+    const orderDetails =
+        await orderRepository.findOne({
+            where: {
+                orderId:
+                    savedOrder.orderId,
+            },
+            relations: [
+                "client",
+                "subClient",
 
-    const orderDetails = await orderRepository.findOne({
-        where: {
-            orderId: savedOrder.orderId,
-        },
-        relations: [
-            "client",
-            "subClient",
-            "items",
-            "items.variant",
-            "items.variant.product",
-            "items.variant.color",
-            "items.variant.size",
-            "shippingAddress",
-            "billingAddress",
-        ],
-    });
+                "items",
+                "items.variant",
+                "items.variant.product",
+                "items.variant.color",
+                "items.variant.size",
+
+                "shippingAddress",
+                "billingAddress",
+            ],
+        });
 
     return orderDetails;
 };
+
+
 
 export const getOrders = async (
     query: any,
@@ -1601,4 +1735,29 @@ export const selectPaymentMethod = async (
     );
 
     return order;
+};
+
+const roundMoney = (value: number) =>
+    Math.round((value + Number.EPSILON) * 100) / 100;
+
+const calculateItemAmounts = (
+    price: number,
+    quantity: number,
+    discountPercentage: number
+) => {
+    const subtotal = roundMoney(price * quantity);
+
+    const discount = roundMoney(
+        (subtotal * discountPercentage) / 100
+    );
+
+    const total = roundMoney(
+        subtotal - discount
+    );
+
+    return {
+        subtotal,
+        discount,
+        total,
+    };
 };

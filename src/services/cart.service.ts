@@ -10,6 +10,7 @@ export const variantRepository = AppDataSource.getRepository(Variant);
 export const cartRepository = AppDataSource.getRepository(Cart);
 export const cartItemRepository = AppDataSource.getRepository(CartItem);
 
+
 export const addToCart = async (
     body: any,
     userId: number,
@@ -23,7 +24,7 @@ export const addToCart = async (
     }
 
     if (!variantId) {
-        throw new Error(" Variant is required.");
+        throw new Error("Variant is required.");
     }
 
     if (!quantity || quantity <= 0) {
@@ -42,6 +43,11 @@ export const addToCart = async (
     if (!user) {
         throw new Error("User not found.");
     }
+
+    if (!user.subClient) {
+        throw new Error("Sub client not found.");
+    }
+
 
     const variant = await variantRepository.findOne({
         where: {
@@ -96,93 +102,119 @@ export const addToCart = async (
 
     const price = Number(variant.price);
 
-    const discountPercentage = Number(
-        variant.discount_percentage
-    );
+    const discountPercentage =
+        Number(variant.discount_percentage || 0);
 
-    const subtotal =
-        price * quantity;
-
-    const discountAmount =
-        (subtotal * discountPercentage) / 100;
-
-    const discountedAmount =
-        subtotal - discountAmount;
+    // --------------------------------
+    // 8. Existing cart item
+    // --------------------------------
 
     if (cartItem) {
 
-        const totalQty = cartItem.quantity + quantity;
+        const totalQty =
+            cartItem.quantity + quantity;
 
+        // Check total quantity against stock
         if (variant.stock < totalQty) {
             throw new Error(
                 `${variant.name} has only ${variant.stock} items available.`
             );
         }
 
-
-        const totalSubtotal =
-            price * totalQty;
-
-        const totalDiscount =
-            (totalSubtotal * discountPercentage) / 100;
-
+        // Calculate using TOTAL quantity
+        const {
+            subtotal,
+            discount,
+            total,
+        } = calculateItemAmounts(
+            price,
+            totalQty,
+            discountPercentage
+        );
 
         cartItem.quantity = totalQty;
+
         cartItem.price = price;
 
         cartItem.discount_percentage =
             discountPercentage;
 
         cartItem.discount_amount =
-            totalDiscount;
+            discount;
 
         cartItem.discounted_amount =
-            totalSubtotal - totalDiscount;
+            total;
 
         cartItem.amount =
-            totalSubtotal - totalDiscount;
-
+            total;
 
         await cartItemRepository.save(cartItem);
 
-    } else {
+    }
+
+    else {
+
+        const {
+            subtotal,
+            discount,
+            total,
+        } = calculateItemAmounts(
+            price,
+            quantity,
+            discountPercentage
+        );
 
         cartItem = cartItemRepository.create({
             cart,
+
             cart_id: cart.cartId,
+
             variant,
+
             variant_id: variant.variantId,
+
             quantity,
+
             price,
+
             discount_percentage:
                 discountPercentage,
-            discount_amount:
-                discountAmount,
-            discounted_amount:
-                discountedAmount,
-            amount:
-                discountedAmount,
-        });
 
+            discount_amount:
+                discount,
+
+            discounted_amount:
+                total,
+
+            amount:
+                total,
+        });
 
         await cartItemRepository.save(cartItem);
     }
 
-    const savedCartItem = await cartItemRepository.findOne({
-        where: {
-            cartItemId: cartItem.cartItemId,
-        },
-        relations: [
-            "cart",
-            "variant",
-            "variant.product",
-            "variant.color",
-            "variant.size",
-        ],
-    });
+    // --------------------------------
+    // 10. Return complete cart item
+    // --------------------------------
+
+    const savedCartItem =
+        await cartItemRepository.findOne({
+            where: {
+                cartItemId:
+                    cartItem.cartItemId,
+            },
+            relations: [
+                "cart",
+                "variant",
+                "variant.product",
+                "variant.color",
+                "variant.size",
+            ],
+        });
 
     return savedCartItem;
 };
+
 
 export const getCart = async (
     userId: number,
@@ -486,4 +518,24 @@ const getExpectedDeliveryDate = (maxDeliveryDays?: number | null) => {
     expectedDate.setDate(expectedDate.getDate() + Number(maxDeliveryDays));
 
     return expectedDate.toISOString().split("T")[0]; // YYYY-MM-DD
+};
+
+const calculateItemAmounts = (
+    price: number,
+    quantity: number,
+    discountPercentage: number
+) => {
+    const subtotal = price * quantity;
+
+    const discount =
+        (subtotal * discountPercentage) / 100;
+
+    const total =
+        subtotal - discount;
+
+    return {
+        subtotal,
+        discount,
+        total,
+    };
 };
