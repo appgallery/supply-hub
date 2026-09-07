@@ -33,6 +33,8 @@ export class OrderItem {
     })
     price: number;
 
+    @Column("decimal", { precision: 10, scale: 2, default: 0, }) discounted_price: number;
+
     @Column("decimal", {
         precision: 10,
         scale: 2,

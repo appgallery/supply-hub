@@ -190,6 +190,10 @@ export const createOrder = async (
             discountPercentage
         );
 
+        const discountedPrice = roundMoney(
+            price - (price * discountPercentage) / 100
+        );
+
         // --------------------------------
         // Add to order totals
         // --------------------------------
@@ -212,6 +216,7 @@ export const createOrder = async (
                 quantity: item.quantity,
                 price,
                 discount: itemDiscount,
+                discounted_price: discountedPrice,
                 total: itemTotal,
             });
 
@@ -368,6 +373,7 @@ export const createOrder = async (
 
 
 
+
 export const getOrders = async (
     query: any,
     userId: number
@@ -411,10 +417,8 @@ export const getOrders = async (
         .leftJoinAndSelect("order.invoice", "invoice")
         .leftJoinAndSelect("invoice.transactions", "transaction");
 
-
     // Client can see all dealer orders
     if (user.client) {
-
         qb.andWhere(
             "client.clientId = :clientId",
             {
@@ -430,12 +434,10 @@ export const getOrders = async (
                 }
             );
         }
-
     }
 
     // Dealer can see only own orders
     else if (user.subClient) {
-
         qb.andWhere(
             "subClient.subClientId = :subClientId",
             {
@@ -444,10 +446,8 @@ export const getOrders = async (
         );
     }
 
-
-    // Search by order number OR client name OR product name
+    // Search by client name OR product name
     if (search) {
-
         qb.andWhere(
             `
             (
@@ -459,9 +459,7 @@ export const getOrders = async (
                 search: `%${search}%`
             }
         );
-
     }
-
 
     if (status) {
         qb.andWhere(
@@ -471,6 +469,7 @@ export const getOrders = async (
             }
         );
     }
+
     if (paymentStatus) {
         qb.andWhere(
             "order.payment_status = :paymentStatus",
@@ -480,28 +479,37 @@ export const getOrders = async (
         );
     }
 
-
     qb.orderBy(
         "order.created_at",
         "DESC"
     );
 
-
     qb.skip(Number(offset))
         .take(Number(limit));
 
+    const [orders, total] =
+        await qb.getManyAndCount();
 
-    const [orders, total] = await qb.getManyAndCount();
-
+    // Use discounted price saved in OrderItem
+    // instead of the current Variant discounted price
+    const formattedOrders = orders.map((order) => ({
+        ...order,
+        items: order.items.map((item) => ({
+            ...item,
+            discounted_price: item.discounted_price,
+        })),
+    }));
 
     return {
         total,
         offset: Number(offset),
         limit: Number(limit),
-        count: orders.length,
-        orders,
+        count: formattedOrders.length,
+        orders: formattedOrders,
     };
 };
+
+
 
 export const getOrderById = async (
     orderId: number,
@@ -580,7 +588,7 @@ export const getOrderById = async (
         ...order,
         items: order.items.map((item) => ({
             ...item,
-            discounted_price: item.variant.discounted_price,
+            discounted_price: item.discounted_price,
         })),
     };
 };
