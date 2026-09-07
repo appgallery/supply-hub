@@ -1212,7 +1212,10 @@ export const getProductById = async (
     product.wholesalePriceTiers = wholesalePriceTiers;
     product.variants = variants;
 
-    return product;
+    return {
+        ...product,
+        expectedDeliveryDate: getExpectedDeliveryDate(product.max_delivery_days),
+    };
 };
 
 export const getDealerProducts = async (
@@ -2087,4 +2090,13 @@ export const toggleProductStatus = async (
             : "Product deactivated successfully.",
         is_active: product.is_active,
     };
+};
+
+const getExpectedDeliveryDate = (maxDeliveryDays?: number | null) => {
+    if (!maxDeliveryDays) return null;
+
+    const expectedDate = new Date();
+    expectedDate.setDate(expectedDate.getDate() + Number(maxDeliveryDays));
+
+    return expectedDate.toISOString().split("T")[0]; // YYYY-MM-DD
 };

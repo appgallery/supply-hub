@@ -23,7 +23,7 @@ export const addToCart = async (
     }
 
     if (!variantId) {
-        throw new Error("Variant is required.");
+        throw new Error(" Variant is required.");
     }
 
     if (!quantity || quantity <= 0) {
@@ -193,6 +193,21 @@ export const getCart = async (
         throw new Error("Only sub client can access this API.");
     }
 
+    // Get sub client + client tax information
+    const user = await userRepository.findOne({
+        where: {
+            userId,
+        },
+        relations: [
+            "subClient",
+            "subClient.client",
+        ],
+    });
+
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
     const cart = await cartRepository.findOne({
         where: {
             user_id: userId,
@@ -208,69 +223,158 @@ export const getCart = async (
     });
 
     if (!cart) {
-
         return {
             cartId: null,
             items: [],
             subtotal: 0,
             totalDiscount: 0,
+            totalBeforeTax: 0,
+            taxPercentage: 0,
+            taxAmount: 0,
+            shippingAmount: 0,
             grandTotal: 0,
         };
     }
 
     let subtotal = 0;
     let totalDiscount = 0;
-    let grandTotal = 0;
+    let maxDeliveryDays = 0;
 
     const items = cart.cartItems.map((item) => {
 
+        const productMaxDeliveryDays =
+            Number(item.variant.product?.max_delivery_days || 0);
+
+        if (productMaxDeliveryDays > maxDeliveryDays) {
+            maxDeliveryDays = productMaxDeliveryDays;
+        }
+
         const price = Number(item.price);
 
+        const discountPercentage =
+            Number(item.discount_percentage);
+
         const discount =
-            (price * Number(item.discount_percentage)) / 100;
+            (price * discountPercentage) / 100;
 
-        const finalPrice = price - discount;
+        const finalPrice =
+            price - discount;
 
-        const total = finalPrice * item.quantity;
+        const total =
+            finalPrice * item.quantity;
 
-        subtotal += price * item.quantity;
-        totalDiscount += discount * item.quantity;
-        grandTotal += total;
+        subtotal +=
+            price * item.quantity;
+
+        totalDiscount +=
+            discount * item.quantity;
+
 
         return {
             cartItemId: item.cartItemId,
             quantity: item.quantity,
             price,
-            discountPercentage: Number(
-                item.discount_percentage
-            ),
+
+            discountPercentage,
+
             finalPrice,
+
             total,
+
             variant: {
-                variantId: item.variant.variantId,
-                name: item.variant.name,
-                sku: item.variant.sku,
-                price: item.variant.price,
+                variantId:
+                    item.variant.variantId,
 
-                color: item.variant.color,
-                size: item.variant.size,
+                name:
+                    item.variant.name,
 
-                images: item.variant.variantImages?.map((image) => ({
-                    variantImageId: image.variantImageId,
-                    imageUrl: image.image_url,
-                    alt_text: image.alt_text,
-                    is_thumbnail: image.is_thumbnail,
-                })) || [],
+                sku:
+                    item.variant.sku,
+
+                availableStock:
+                    item.variant.stock,
+
+                price:
+                    Number(item.variant.price),
+
+                discounted_price:
+                    Number(item.variant.discounted_price),
+
+                color:
+                    item.variant.color,
+
+                size:
+                    item.variant.size,
+
+                images:
+                    item.variant.variantImages?.map((image) => ({
+                        variantImageId:
+                            image.variantImageId,
+
+                        imageUrl:
+                            image.image_url,
+
+                        alt_text:
+                            image.alt_text,
+
+                        is_thumbnail:
+                            image.is_thumbnail,
+                    })) || [],
             },
         };
     });
 
+    const expectedDeliveryDate =
+        getExpectedDeliveryDate(maxDeliveryDays);
+
+    // Amount after discount
+    const totalBeforeTax =
+        subtotal - totalDiscount;
+
+    // Get tax percentage from Client
+    const taxPercentage =
+        Number(user.subClient?.client?.taxRate) || 0;
+
+    // Calculate tax
+    const taxAmount =
+        (totalBeforeTax * taxPercentage) / 100;
+
+    const shippingAmount =
+        Number(user.subClient?.shippingAmount) || 0;
+
+    // Final total
+    const grandTotal =
+        totalBeforeTax +
+        taxAmount +
+        shippingAmount;
+
     return {
         cartId: cart.cartId,
+
         items,
-        subtotal,
-        totalDiscount,
-        grandTotal,
+
+        subtotal:
+            Number(subtotal.toFixed(2)),
+
+        totalDiscount:
+            Number(totalDiscount.toFixed(2)),
+
+        totalBeforeTax:
+            Number(totalBeforeTax.toFixed(2)),
+
+        taxPercentage:
+            Number(taxPercentage.toFixed(2)),
+
+        taxAmount:
+            Number(taxAmount.toFixed(2)),
+
+        shippingAmount:
+            Number(shippingAmount.toFixed(2)),
+
+        grandTotal:
+            Number(grandTotal.toFixed(2)),
+
+        expectedDeliveryDate
     };
 };
 
@@ -373,4 +477,13 @@ export const deleteCartItem = async (
     return {
         message: "Cart item deleted successfully.",
     };
+};
+
+const getExpectedDeliveryDate = (maxDeliveryDays?: number | null) => {
+    if (!maxDeliveryDays) return null;
+
+    const expectedDate = new Date();
+    expectedDate.setDate(expectedDate.getDate() + Number(maxDeliveryDays));
+
+    return expectedDate.toISOString().split("T")[0]; // YYYY-MM-DD
 };
