@@ -371,9 +371,6 @@ export const createOrder = async (
     return orderDetails;
 };
 
-
-
-
 export const getOrders = async (
     query: any,
     userId: number
@@ -504,12 +501,10 @@ export const getOrders = async (
         total,
         offset: Number(offset),
         limit: Number(limit),
-        count: formattedOrders.length,
+        count: total,
         orders: formattedOrders,
     };
 };
-
-
 
 export const getOrderById = async (
     orderId: number,
@@ -583,6 +578,19 @@ export const getOrderById = async (
         throw new Error("Order not found.");
     }
 
+    let maxDeliveryDays = 0;
+
+    order.items.forEach((item) => {
+        const productMaxDeliveryDays =
+            Number(item.variant.product?.max_delivery_days || 0);
+
+        if (productMaxDeliveryDays > maxDeliveryDays) {
+            maxDeliveryDays = productMaxDeliveryDays;
+        }
+    });
+
+    const expectedDeliveryDate =
+        getExpectedDeliveryDate(maxDeliveryDays);
 
     return {
         ...order,
@@ -590,6 +598,7 @@ export const getOrderById = async (
             ...item,
             discounted_price: item.discounted_price,
         })),
+        expectedDeliveryDate,
     };
 };
 
@@ -1775,4 +1784,13 @@ const calculateItemAmounts = (
         discount,
         total,
     };
+};
+
+const getExpectedDeliveryDate = (maxDeliveryDays?: number | null) => {
+    if (!maxDeliveryDays) return null;
+
+    const expectedDate = new Date();
+    expectedDate.setDate(expectedDate.getDate() + Number(maxDeliveryDays));
+
+    return expectedDate.toISOString().split("T")[0]; // YYYY-MM-DD
 };

@@ -254,17 +254,9 @@ export const getCart = async (
         ],
     });
 
-    if (!cart) {
+    if (!cart || !cart.cartItems || cart.cartItems.length === 0) {
         return {
-            cartId: null,
-            items: [],
-            subtotal: 0,
-            totalDiscount: 0,
-            totalBeforeTax: 0,
-            taxPercentage: 0,
-            taxAmount: 0,
-            shippingAmount: 0,
-            grandTotal: 0,
+            items: []
         };
     }
 
