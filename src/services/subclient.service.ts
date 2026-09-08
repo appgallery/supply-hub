@@ -554,27 +554,29 @@ export const getDealerDashboard = async (
 
 
 
-    // 2. Revenue Overview Week Wise
+    // 2. Revenue Overview Week Wise 
 
 
     const revenueOverview = await orderRepository
-        .createQueryBuilder("order")
+        .createQueryBuilder("ord")
         .select(
             `
-        FLOOR((EXTRACT(DAY FROM order.createdAt)-1)/7)+1
-        `,
+    FLOOR((EXTRACT(DAY FROM ord.created_at)-1)/7)+1
+    `,
             "week"
         )
         .addSelect(
-            "SUM(order.grandTotal)",
+            "SUM(ord.totalAmount)",
             "totalPurchase"
         )
         .where(
-            "order.subClientId = :dealerId",
-            { dealerId }
+            "ord.subClientId = :dealerId",
+            {
+                dealerId
+            }
         )
         .andWhere(
-            "order.createdAt BETWEEN :startDate AND :endDate",
+            "ord.created_at BETWEEN :startDate AND :endDate",
             {
                 startDate,
                 endDate
@@ -582,7 +584,6 @@ export const getDealerDashboard = async (
         )
         .groupBy("week")
         .getRawMany();
-
 
 
     // 3. Order Status based on selected month
@@ -606,7 +607,7 @@ export const getDealerDashboard = async (
                 }
             )
             .andWhere(
-                "order.createdAt BETWEEN :startDate AND :endDate",
+                "order.created_at BETWEEN :startDate AND :endDate",
                 {
                     startDate,
                     endDate
@@ -655,9 +656,9 @@ export const getDealerDashboard = async (
             take: 5,
 
             relations: [
-                "orderItems",
-                "orderItems.variant",
-                "orderItems.variant.product"
+                "items",
+                "items.variant",
+                "items.variant.product"
             ]
 
         });
@@ -717,7 +718,7 @@ export const getDealerDashboard = async (
             )
 
             .orderBy(
-                "totalQuantity",
+                '"totalQuantity"',
                 "DESC"
             )
 
