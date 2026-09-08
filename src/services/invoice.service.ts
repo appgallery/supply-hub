@@ -116,7 +116,7 @@ export const getInvoices = async (
     if(paymentStatus){
 
         query.andWhere(
-            "invoice.status = :paymentStatus",
+            "order.payment_status = :paymentStatus",
             {
                 paymentStatus
             }
