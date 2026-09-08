@@ -9,5 +9,6 @@ router.get("/get-sub-clients", authenticate , subclientcontroller.getSubClients)
 router.get("/get-sub-client-by-id", authenticate , subclientcontroller.getSubClientById);
 router.put("/update-sub-clients", authenticate , subclientcontroller.updateSubClient);
 router.delete("/delete-sub-clients", authenticate , subclientcontroller.deleteSubClient);
+router.get("/get-dealer-dashboard", authenticate , subclientcontroller.getDealerDashboardController);
 
 export default router;

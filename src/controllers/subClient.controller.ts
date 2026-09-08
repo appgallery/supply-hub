@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as subClientService from "../services/subclient.service";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { getDealerDashboard } from "../services/subclient.service";
 
 export const createSubClient = async (
     req: AuthRequest,
@@ -169,6 +170,38 @@ export const deleteSubClient = async (
         return res.status(400).json({
             status: false,
             message: error.message || "Failed to delete sub client.",
+        });
+
+    }
+};
+
+export const getDealerDashboardController = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+
+        const { month, year } = req.query;
+
+        const dealerId = req.user!.subClientId;
+
+        const result = await getDealerDashboard(
+            dealerId,
+            Number(month),
+            Number(year)
+        );
+
+        return res.status(200).json({
+            status: true,
+            message: "Dealer dashboard fetched successfully.",
+            data: result,
+        });
+
+    } catch (error: any) {
+
+        return res.status(500).json({
+            status: false,
+            message: error.message,
         });
 
     }

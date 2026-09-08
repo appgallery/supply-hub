@@ -7,11 +7,20 @@ import { SubClient } from "../entities/SubClient";
 import { User } from "../entities/User";
 import { createActivity } from "../utils/helper";
 import { ActivityType, TaxType } from "../utils/constants";
+// import { orderRepository } from "./order.service";
+import { Order } from "../entities/Order";
+import { OrderItem } from "../entities/OrderItem";
+import { ActivityLog } from "../entities/ActivityLog";
+
 
 const clientRepository = AppDataSource.getRepository(Client);
 const subClientRepository = AppDataSource.getRepository(SubClient);
 const userRepository = AppDataSource.getRepository(User);
 const roleRepository = AppDataSource.getRepository(Role);
+const orderRepository = AppDataSource.getRepository(Order)
+const orderItemRepository = AppDataSource.getRepository(OrderItem);
+const activityRepository =
+    AppDataSource.getRepository(ActivityLog);
 
 export const createSubClient = async (
     body: any,
@@ -478,4 +487,260 @@ export const deleteSubClient = async (
     return {
         message: "Sub client deleted successfully.",
     };
+};
+
+export const getDealerDashboard = async (
+    dealerId: number,
+    month: number,
+    year: number
+) => {
+
+
+    const startDate = new Date(year, month - 1, 1);
+
+    const endDate = new Date(
+        year,
+        month,
+        0,
+        23,
+        59,
+        59
+    );
+
+
+    // 1. Order Summary
+
+    const orders = await orderRepository.find({
+        where: {
+            subClient: {
+                subClientId: dealerId
+            }
+        },
+        relations: [
+            "orderItems",
+            "orderItems.variant",
+            "orderItems.variant.product"
+        ]
+    });
+
+
+    const orderSummary = {
+
+        totalOrders: orders.length,
+
+        pendingOrders:
+            orders.filter(
+                o => o.status === "PENDING"
+            ).length,
+
+        processingOrders:
+            orders.filter(
+                o => o.status === "APPROVED"
+            ).length,
+
+
+        completedOrders:
+            orders.filter(
+                o => o.status === "COMPLETED"
+            ).length,
+
+
+        cancelledOrders:
+            orders.filter(
+                o => o.status === "REJECTED"
+            ).length
+
+    };
+
+
+
+    // 2. Revenue Overview Week Wise
+
+
+    const revenueOverview = await orderRepository
+        .createQueryBuilder("order")
+        .select(
+            `
+        FLOOR((EXTRACT(DAY FROM order.createdAt)-1)/7)+1
+        `,
+            "week"
+        )
+        .addSelect(
+            "SUM(order.grandTotal)",
+            "totalPurchase"
+        )
+        .where(
+            "order.subClientId = :dealerId",
+            { dealerId }
+        )
+        .andWhere(
+            "order.createdAt BETWEEN :startDate AND :endDate",
+            {
+                startDate,
+                endDate
+            }
+        )
+        .groupBy("week")
+        .getRawMany();
+
+
+
+    // 3. Order Status based on selected month
+
+
+    const orderStatusOverview =
+        await orderRepository
+            .createQueryBuilder("order")
+            .select(
+                "order.status",
+                "status"
+            )
+            .addSelect(
+                "COUNT(order.orderId)",
+                "count"
+            )
+            .where(
+                "order.subClientId = :dealerId",
+                {
+                    dealerId
+                }
+            )
+            .andWhere(
+                "order.createdAt BETWEEN :startDate AND :endDate",
+                {
+                    startDate,
+                    endDate
+                }
+            )
+            .groupBy(
+                "order.status"
+            )
+            .getRawMany();
+
+
+
+    // 4. Important Updates
+
+    const importantUpdates =
+        await activityRepository.find({
+
+            where: {
+                userId: dealerId
+            },
+
+            order: {
+                created_at: "DESC"
+            },
+
+            take: 5
+        });
+
+
+
+    // 5. Recent Orders
+
+    const recentOrders =
+        await orderRepository.find({
+
+            where: {
+                subClient: {
+                    subClientId: dealerId
+                }
+            },
+
+            order: {
+                created_at: "DESC"
+            },
+
+            take: 5,
+
+            relations: [
+                "orderItems",
+                "orderItems.variant",
+                "orderItems.variant.product"
+            ]
+
+        });
+
+
+
+    // 6. Top Purchased Products
+
+
+    const topProducts =
+        await orderItemRepository
+            .createQueryBuilder("item")
+
+            .leftJoin(
+                "item.order",
+                "order"
+            )
+
+            .leftJoin(
+                "item.variant",
+                "variant"
+            )
+
+            .leftJoin(
+                "variant.product",
+                "product"
+            )
+
+            .select(
+                "product.productId",
+                "productId"
+            )
+
+            .addSelect(
+                "product.productName",
+                "productName"
+            )
+
+            .addSelect(
+                "SUM(item.quantity)",
+                "totalQuantity"
+            )
+
+            .where(
+                "order.subClientId = :dealerId",
+                {
+                    dealerId
+                }
+            )
+
+            .groupBy(
+                "product.productId"
+            )
+
+            .addGroupBy(
+                "product.productName"
+            )
+
+            .orderBy(
+                "totalQuantity",
+                "DESC"
+            )
+
+            .limit(5)
+
+            .getRawMany();
+
+
+
+    return {
+
+        orderSummary,
+
+        revenueOverview,
+
+        orderStatusOverview,
+
+        importantUpdates,
+
+        recentOrders,
+
+        topProducts
+
+    };
+
 };
