@@ -6,29 +6,46 @@ export const getInvoicesController = async (
     req: AuthRequest,
     res: Response
 ) => {
+
     try {
-        const invoiceId = req.query.invoiceId
-            ? Number(req.query.invoiceId)
-            : undefined;
 
-        const userId = req.user.userId;
-        const roleName = req.user.roleName;
-
-        const data = await getInvoices(
+        const {
             invoiceId,
-            userId,
-            roleName
+            paymentStatus,
+            orderStatus,
+            offset,
+            limit,
+            searchTerm
+        } = req.query;
+
+
+        const result = await getInvoices(
+            invoiceId ? Number(invoiceId) : undefined,
+            req.user!.userId,
+            req.user!.roleName,
+            {
+                paymentStatus: paymentStatus as string,
+                orderStatus: orderStatus as string,
+                offset: Number(offset) || 0,
+                limit: Number(limit) || 10,
+                searchTerm: searchTerm as string
+            }
         );
 
+
         return res.status(200).json({
-            success: true,
-            message: "Invoice fetched successfully.",
-            data,
+            status:true,
+            message:"Invoices fetched successfully.",
+            data:result
         });
-    } catch (error: any) {
-        return res.status(400).json({
-            success: false,
-            message: error.message,
+
+
+    } catch(error:any){
+
+        return res.status(500).json({
+            status:false,
+            message:error.message
         });
+
     }
 };
