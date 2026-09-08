@@ -517,9 +517,9 @@ export const getDealerDashboard = async (
             }
         },
         relations: [
-            "orderItems",
-            "orderItems.variant",
-            "orderItems.variant.product"
+            "items",
+            "items.variant",
+            "items.variant.product"
         ]
     });
 
