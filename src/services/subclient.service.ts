@@ -567,7 +567,7 @@ export const getDealerDashboard = async (
         )
         .addSelect(
             "SUM(ord.totalAmount)",
-            "totalPurchase"
+            "revenue"
         )
         .where(
             "ord.subClientId = :dealerId",
