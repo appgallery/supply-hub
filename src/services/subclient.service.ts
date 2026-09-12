@@ -556,39 +556,121 @@ export const getDealerDashboard = async (
 
     // 2. Revenue Overview Week Wise 
 
+    const daysInMonth = endDate.getDate();
 
-    const revenueOverview = await orderRepository
-        .createQueryBuilder("ord")
-        .select(
-            `
-    FLOOR((EXTRACT(DAY FROM ord.created_at)-1)/7)+1
-    `,
-            "week"
-        )
-        .addSelect(
-            "SUM(ord.totalAmount)",
-            "revenue"
-        )
-        .where(
-            "ord.subClientId = :dealerId",
-            {
-                dealerId
-            }
-        )
-        .andWhere(
-            "ord.created_at BETWEEN :startDate AND :endDate",
-            {
-                startDate,
-                endDate
-            }
-        )
-        .groupBy("week")
-        .getRawMany();
+    const weekRanges = [
+        { label: "Week 1", start: 1, end: 7 },
+        { label: "Week 2", start: 8, end: 14 },
+        { label: "Week 3", start: 15, end: 21 },
+        { label: "Week 4", start: 22, end: daysInMonth },
+    ];
 
+    const revenueOverview = [];
+
+    for (const week of weekRanges) {
+
+        const weekStart = new Date(
+            year,
+            month - 1,
+            week.start,
+            0,
+            0,
+            0,
+            0
+        );
+
+        const weekEnd = new Date(
+            year,
+            month - 1,
+            week.end,
+            23,
+            59,
+            59,
+            999
+        );
+
+        const revenue = await orderRepository
+            .createQueryBuilder("ord")
+            .select(
+                "COALESCE(SUM(ord.totalAmount),0)",
+                "revenue"
+            )
+            .where(
+                "ord.subClientId = :dealerId",
+                { dealerId }
+            )
+            .andWhere(
+                "ord.created_at BETWEEN :startDate AND :endDate",
+                {
+                    startDate: weekStart,
+                    endDate: weekEnd,
+                }
+            )
+            .getRawOne();
+
+        revenueOverview.push({
+            week: week.label,
+            revenue: Number(revenue.revenue),
+        });
+    }
+
+    // Current Month Revenue
+    const currentRevenue = await orderRepository
+        .createQueryBuilder("order")
+        .select("COALESCE(SUM(order.totalAmount),0)", "revenue")
+        .where("order.subClientId = :dealerId", { dealerId })
+        .andWhere("order.created_at BETWEEN :start AND :end", {
+            start: startDate,
+            end: endDate,
+        })
+        .getRawOne();
+
+    // Previous Month
+    const previousMonthDate = new Date(year, month - 2, 1);
+
+    const startLastMonth = new Date(
+        previousMonthDate.getFullYear(),
+        previousMonthDate.getMonth(),
+        1,
+        0,
+        0,
+        0
+    );
+
+    const endLastMonth = new Date(
+        previousMonthDate.getFullYear(),
+        previousMonthDate.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+    );
+
+    const lastMonthRevenue = await orderRepository
+        .createQueryBuilder("order")
+        .select("COALESCE(SUM(order.totalAmount),0)", "revenue")
+        .where("order.subClientId = :dealerId", { dealerId })
+        .andWhere("order.created_at BETWEEN :start AND :end", {
+            start: startLastMonth,
+            end: endLastMonth,
+        })
+        .getRawOne();
+
+    const calculatePercentage = (
+        current: number,
+        previous: number
+    ) => {
+        if (previous === 0) {
+            return current > 0 ? 100 : 0;
+        }
+
+        return Number(
+            (((current - previous) / previous) * 100).toFixed(2)
+        );
+    };
 
     // 3. Order Status based on selected month
-
-
     const orderStatusOverview =
         await orderRepository
             .createQueryBuilder("order")
@@ -618,130 +700,114 @@ export const getDealerDashboard = async (
             )
             .getRawMany();
 
-
-
     // 4. Important Updates
 
-    const importantUpdates =
+    const activityFeed =
         await activityRepository.find({
-
             where: {
                 userId: dealerId
             },
-
             order: {
                 created_at: "DESC"
             },
-
             take: 5
         });
 
-
-
     // 5. Recent Orders
-
     const recentOrders =
         await orderRepository.find({
-
             where: {
                 subClient: {
                     subClientId: dealerId
                 }
             },
-
             order: {
                 created_at: "DESC"
             },
-
             take: 5,
-
             relations: [
                 "items",
                 "items.variant",
                 "items.variant.product"
             ]
-
         });
 
-
-
     // 6. Top Purchased Products
-
 
     const topProducts =
         await orderItemRepository
             .createQueryBuilder("item")
-
             .leftJoin(
                 "item.order",
                 "order"
             )
-
             .leftJoin(
                 "item.variant",
                 "variant"
             )
-
             .leftJoin(
                 "variant.product",
                 "product"
             )
-
             .select(
                 "product.productId",
                 "productId"
             )
-
             .addSelect(
                 "product.productName",
                 "productName"
             )
-
             .addSelect(
                 "SUM(item.quantity)",
                 "totalQuantity"
             )
-
+            .addSelect(
+                "SUM(item.quantity * item.price)",
+                "totalSpent"
+            )
             .where(
                 "order.subClientId = :dealerId",
                 {
                     dealerId
                 }
             )
-
+            .andWhere(
+                "order.created_at BETWEEN :startDate AND :endDate",
+                {
+                    startDate,
+                    endDate
+                }
+            )
             .groupBy(
                 "product.productId"
             )
-
             .addGroupBy(
                 "product.productName"
             )
-
             .orderBy(
-                '"totalQuantity"',
+                '"totalSpent"',
                 "DESC"
             )
-
             .limit(5)
-
             .getRawMany();
 
 
 
     return {
-
         orderSummary,
-
+        revenueDetails: {
+            thisMonth: Number(currentRevenue.revenue),
+            lastMonth: Number(lastMonthRevenue.revenue),
+            percentage: calculatePercentage(
+                Number(currentRevenue.revenue),
+                Number(lastMonthRevenue.revenue)
+            ),
+        },
         revenueOverview,
-
         orderStatusOverview,
-
-        importantUpdates,
-
+        activityFeed,
         recentOrders,
-
         topProducts
-
     };
 
 };
