@@ -705,7 +705,7 @@ export const getDealerDashboard = async (
     const activityFeed =
         await activityRepository.find({
             where: {
-                userId: dealerId
+                subClientId: dealerId
             },
             order: {
                 created_at: "DESC"
