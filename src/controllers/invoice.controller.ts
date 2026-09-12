@@ -36,7 +36,7 @@ export const getInvoicesController = async (
         return res.status(200).json({
             status:true,
             message:"Invoices fetched successfully.",
-            data:result
+            ...result
         });
 
 
