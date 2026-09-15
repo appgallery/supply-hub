@@ -10,6 +10,9 @@ import { SubClient } from "./SubClient";
 import { Product } from "./Product";
 import { ClientOwner } from "./ClientOwner";
 import { TaxType } from "../utils/constants";
+import { TallyActivationCode } from "./TallyActivationCode";
+import { TallyDevice } from "./TallyDevice";
+import { TallySyncJob } from "./TallySyncJob";
 
 @Entity("clients")
 export class Client extends BaseEntity {
@@ -193,4 +196,22 @@ export class Client extends BaseEntity {
 
   @OneToMany(() => Product, (product) => product.client)
   products: Product[];
+
+  @OneToMany(
+    () => TallyActivationCode,
+    (activationCode) => activationCode.client
+  )
+  tallyActivationCodes: TallyActivationCode[];
+
+  @OneToMany(
+    () => TallyDevice,
+    (device) => device.client
+  )
+  tallyDevices: TallyDevice[];
+
+  @OneToMany(
+    () => TallySyncJob,
+    (job) => job.client
+  )
+  tallySyncJobs: TallySyncJob[];
 }
