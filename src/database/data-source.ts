@@ -26,6 +26,9 @@ import { ProductTechnicalDetail } from "../entities/ProductTechnicalDetails";
 import { WholesalePriceTier } from "../entities/WholesalePriceTiers";
 import { Address } from "../entities/Address";
 import { Invoice } from "../entities/Invoice";
+import { TallyActivationCode } from "../entities/TallyActivationCode";
+import { TallyDevice } from "../entities/TallyDevice";
+import { TallySyncJob } from "../entities/TallySyncJob";
 
 dotenv.config();
 console.log({
@@ -69,6 +72,9 @@ export const AppDataSource = new DataSource({
         ProductTechnicalDetail,
         WholesalePriceTier,
         Address,
-        Invoice
+        Invoice,
+        TallyActivationCode,
+        TallyDevice,
+        TallySyncJob
     ],
 });
