@@ -1792,5 +1792,5 @@ const getExpectedDeliveryDate = (maxDeliveryDays?: number | null) => {
     const expectedDate = new Date();
     expectedDate.setDate(expectedDate.getDate() + Number(maxDeliveryDays));
 
-    return expectedDate.toISOString().split("T")[0]; // YYYY-MM-DD
+    return expectedDate.toISOString().split("T")[0];
 };

@@ -38,6 +38,13 @@ app.use(morgan("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+    console.log("🔥 REQUEST REACHED EXPRESS");
+    console.log("METHOD:", req.method);
+    console.log("URL:", req.originalUrl);
+    next();
+});
+
 app.use("/api", apiRoutes);
 
 const PORT = process.env.PORT;

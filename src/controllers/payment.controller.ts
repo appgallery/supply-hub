@@ -10,7 +10,7 @@ export const getRazorpayConnectUrl = async (
     try {
         if (!req.user?.clientId) {
             return res.status(401).json({
-                success: false,
+                status: false,
                 message: "Unauthorized.",
             });
         }
@@ -26,7 +26,7 @@ export const getRazorpayConnectUrl = async (
         console.error("Generate Razorpay OAuth URL Error:", error);
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message || "Something went wrong.",
         });
     }
@@ -41,7 +41,7 @@ export const connectRazorpay = async (
 
         if (!clientId) {
             return res.status(401).json({
-                success: false,
+                status: false,
                 message: "Unauthorized.",
             });
         }
@@ -50,7 +50,7 @@ export const connectRazorpay = async (
 
         if (!code) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Code and state are required.",
             });
         }
@@ -100,7 +100,7 @@ export const razorpayWebhook = async (
 
         if (!signature) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Webhook signature missing.",
             });
         }
@@ -112,7 +112,7 @@ export const razorpayWebhook = async (
 
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Webhook processed successfully.",
         });
 
@@ -126,7 +126,7 @@ export const razorpayWebhook = async (
 
 
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message || "Webhook failed.",
         });
     }
@@ -142,7 +142,7 @@ export const getRazorpayStatus = async (
 
         if (!clientId) {
             return res.status(401).json({
-                success: false,
+                status: false,
                 message: "Unauthorized.",
             });
         }
@@ -169,7 +169,7 @@ export const getRazorpayStatus = async (
 
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message || "Something went wrong.",
         });
     }
@@ -214,7 +214,7 @@ export const disconnectRazorpay = async (
 
         if (!clientId) {
             return res.status(401).json({
-                success: false,
+                status: false,
                 message: "Unauthorized.",
             });
         }
@@ -226,7 +226,7 @@ export const disconnectRazorpay = async (
 
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Razorpay disconnected successfully.",
         });
 
@@ -240,7 +240,7 @@ export const disconnectRazorpay = async (
 
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message || "Something went wrong.",
         });
     }
@@ -294,7 +294,7 @@ export const verifyPayment = async (
             !razorpaySignature
         ) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Payment details are required."
             });
         }
@@ -325,7 +325,7 @@ export const verifyPayment = async (
 
         return res.status(400).json({
 
-            success: false,
+            status: false,
 
             message:
                 error.message ||
@@ -345,7 +345,7 @@ export const getPaymentDetails = async (
 
         if (!transactionId) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "Transaction Id is required.",
             });
         }
@@ -353,14 +353,14 @@ export const getPaymentDetails = async (
         const result = await paymentService.getPaymentDetails(transactionId);
 
         return res.status(200).json({
-            success: true,
+            status: true,
             data: result,
         });
 
     } catch (error: any) {
 
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
 

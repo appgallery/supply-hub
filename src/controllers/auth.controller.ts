@@ -103,7 +103,7 @@ export const saveFcmTokenController = async (
         
         if (!fcmToken) {
             return res.status(400).json({
-                success: false,
+                status: false,
                 message: "FCM token is required.",
             });
         }
@@ -114,13 +114,13 @@ export const saveFcmTokenController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "FCM token saved successfully.",
         });
 
     } catch (error: any) {
         return res.status(400).json({
-            success: false,
+            status: false,
             message: error.message,
         });
     }

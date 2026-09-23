@@ -145,7 +145,7 @@ export const generateCategoryXmlController = async (
 
         if (!user) {
             return res.status(401).json({
-                success: false,
+                status: false,
                 message: "Unauthorized"
             });
         }
@@ -156,7 +156,7 @@ export const generateCategoryXmlController = async (
         );
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Category XML generated successfully.",
             data: result
         });
@@ -165,7 +165,7 @@ export const generateCategoryXmlController = async (
     } catch (error: any) {
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message
         });
     }
@@ -180,7 +180,7 @@ export const readCategoryController = async (
 
         if (!user) {
             return res.status(401).json({
-                success: false,
+                status: false,
                 message: "Unauthorized"
             });
         }
@@ -188,7 +188,7 @@ export const readCategoryController = async (
         const categories = await readCategoriesFromTallyService();
 
         return res.status(200).json({
-            success: true,
+            status: true,
             message: "Categories fetched successfully.",
             data: categories
         });
@@ -196,7 +196,7 @@ export const readCategoryController = async (
     } catch (error: any) {
 
         return res.status(500).json({
-            success: false,
+            status: false,
             message: error.message
         });
 

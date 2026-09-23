@@ -37,7 +37,8 @@ export class Transaction extends BaseEntity {
     @Column({
         type: "decimal",
         precision: 10,
-        scale: 2
+        scale: 2,
+        nullable: true
     })
     amount: number;
 

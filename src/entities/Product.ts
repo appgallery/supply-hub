@@ -74,6 +74,11 @@ export class Product {
   })
   max_delivery_days: number;
 
+  @Column({
+    default: false,
+  })
+  isAsync: boolean;
+
   @OneToMany(() => Variant, (variant) => variant.product)
   variants: Variant[];
 

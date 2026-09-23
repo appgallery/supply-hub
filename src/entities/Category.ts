@@ -7,12 +7,14 @@ import {
     JoinColumn,
     CreateDateColumn,
     UpdateDateColumn,
+    Unique,
 } from "typeorm";
 
 import { Client } from "./Client";
 import { Product } from "./Product";
 
 @Entity("categories")
+@Unique(["client", "categoryCode"])
 export class Category {
 
     @PrimaryGeneratedColumn()
@@ -25,9 +27,7 @@ export class Category {
     @JoinColumn({ name: "clientId" })
     client: Client;
 
-    @Column({
-        unique: true,
-    })
+    @Column()
     categoryCode: string;
 
     @Column()
@@ -54,7 +54,9 @@ export class Category {
     )
     products: Product[];
 
-    @Column()
+    @Column({
+        nullable: true,
+    })
     createdBy: number;
 
     @Column({

@@ -15,6 +15,7 @@ import addressRoute from './address.route'
 import paymentRoute from './payment.route'
 import invoiveRoute from './invoive.route'
 import adminRoute from './admin.route'
+import tally from './tally.route'
 
 const router = Router();
 
@@ -34,5 +35,6 @@ router.use("/address", addressRoute);
 router.use("/payment", paymentRoute);
 router.use("/invoice", invoiveRoute);
 router.use("/admin", adminRoute);
+router.use("/tally", tally);
 
 export default router;

@@ -12,13 +12,11 @@ import { Client } from "./Client";
 import { TallyDevice } from "./TallyDevice";
 
 export enum TallySyncType {
-  CATALOG = "CATALOG",
-  CATEGORIES = "CATEGORIES",
-  LEDGERS = "LEDGERS",
-  STOCK_ITEMS = "STOCK_ITEMS",
-  CUSTOMERS = "CUSTOMERS",
-  VOUCHERS = "VOUCHERS",
-  SYNC_CATEGORIES = "SYNC_CATEGORIES",
+  EXPORT_CATEGORIES = "EXPORT_CATEGORIES",
+  IMPORT_CATEGORIES = "IMPORT_CATEGORIES",
+
+  EXPORT_PRODUCTS = "EXPORT_PRODUCTS",
+  IMPORT_PRODUCTS = "IMPORT_PRODUCTS",
 }
 
 export enum TallySyncStatus {
@@ -52,7 +50,7 @@ export class TallySyncJob extends BaseEntity {
     name: "clientId",
   })
   client: Client;
-  
+
 
   /**
    * Tally connector that will execute this job.
