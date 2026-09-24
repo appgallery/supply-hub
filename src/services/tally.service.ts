@@ -20,6 +20,9 @@ import { Product } from "../entities/Product";
 import { Category } from "../entities/Category";
 import { generateCategoryCode } from "./category.service";
 import { generateProductCode } from "./product.service";
+import { Invoice } from "../entities/Invoice";
+import { InvoiceStatus } from "../utils/constants";
+import { Order } from "../entities/Order";
 
 export class TallyService {
 
@@ -532,6 +535,82 @@ export class TallyService {
       }));
     }
 
+    if (job.type === TallySyncType.EXPORT_INVOICES) {
+
+      const invoiceRepository =
+        AppDataSource.getRepository(Invoice);
+
+      const invoices =
+        await invoiceRepository.find({
+          where: {
+            order: {
+              client: {
+                clientId: job.clientId,
+              },
+            },
+            isAsync: true,
+          },
+          relations: {
+            order: {
+              subClient: true,
+              client: true,
+              items: {
+                variant: {
+                  product: true
+                }
+              },
+            },
+            transactions: true,
+          },
+        });
+      console.log(
+        "Invoice count:",
+        invoices.length
+      );
+
+      if (invoices.length > 0) {
+        console.log(
+          "Invoice items:",
+          invoices[0].order?.items
+        );
+      }
+
+      data = invoices.map((invoice) => ({
+        invoiceId: invoice.invoiceId,
+        invoiceNumber: invoice.invoiceNumber,
+
+        invoiceDate:
+          invoice.created_at
+            .toISOString()
+            .split("T")[0],
+
+        // Buyer / customer
+        partyName:
+          invoice.order?.subClient?.companyName ||
+          invoice.order?.subClient?.contactPerson ||
+          "",
+
+        voucherType:
+          "Sales",
+
+        amount:
+          Number(invoice.amount),
+
+        tax:
+          Number(invoice.tax),
+
+        shippingAmount:
+          Number(invoice.shipping_amount),
+
+        items: invoice.order.items.map(item => ({
+          productName: item.variant?.product?.productName,
+          quantity: Number(item.quantity),
+          rate: Number(item.price),
+          amount: Number(item.total),
+        }))
+      }));
+    }
+
     return {
       jobId: job.id,
       clientId: job.clientId,
@@ -861,6 +940,82 @@ export class TallyService {
           exportResult.failed,
       };
     }
+
+    if (type === "IMPORT_INVOICES") {
+
+      const importResult =
+        await this.importInvoices(
+          job.clientId,
+          data,
+          userId
+        );
+
+      job.totalRecords =
+        importResult.total;
+
+      job.processedRecords =
+        importResult.created +
+        importResult.updated;
+
+      job.failedRecords =
+        importResult.failed;
+
+      job.status =
+        importResult.failed > 0
+          ? TallySyncStatus.FAILED
+          : TallySyncStatus.COMPLETED;
+
+      job.completedAt =
+        new Date();
+
+      await this.tallySyncJobRepository.save(job);
+
+      return {
+        jobId,
+        deviceId,
+        type,
+        status: job.status,
+        ...importResult,
+      };
+    } if (type === "EXPORT_INVOICES") {
+
+      const exportResult =
+        await this.processInvoiceExportResult(
+          job.clientId,
+          data
+        );
+
+      job.totalRecords =
+        exportResult.total;
+
+      job.processedRecords =
+        exportResult.processed;
+
+      job.failedRecords =
+        exportResult.failed;
+
+      job.status =
+        exportResult.failed > 0
+          ? TallySyncStatus.FAILED
+          : TallySyncStatus.COMPLETED;
+
+      job.completedAt =
+        new Date();
+
+      await this.tallySyncJobRepository.save(job);
+
+      return {
+        jobId,
+        deviceId,
+        type,
+        status: job.status,
+        totalRecords: exportResult.total,
+        processedRecords: exportResult.processed,
+        failedRecords: exportResult.failed,
+      };
+    }
+
+
 
     // =========================================================
     // OTHER SYNC TYPES
@@ -1543,6 +1698,367 @@ export class TallyService {
 
     console.log(
       "PRODUCT EXPORT PROCESSING COMPLETE",
+      {
+        total: results.length,
+        processed,
+        failed,
+      }
+    );
+
+    return {
+      total: results.length,
+      processed,
+      failed,
+    };
+  }
+
+  async importInvoices(
+    clientId: number,
+    invoices: Array<{
+      invoiceNumber: string;
+      invoiceDate: string;
+      partyName: string;
+      voucherType: string;
+      amount: number;
+      tax: number;
+      items: Array<{
+        productName: string;
+        quantity: number;
+        rate: number;
+        amount: number;
+        unit?: string;
+      }>;
+    }>,
+    userId: number
+  ) {
+    const invoiceRepository =
+      AppDataSource.getRepository(Invoice);
+
+    const orderRepository =
+      AppDataSource.getRepository(Order);
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const tallyInvoice of invoices) {
+      try {
+        console.log(
+          "[IMPORT] Invoice data received from Tally:",
+          JSON.stringify(tallyInvoice, null, 2)
+        );
+
+        const invoiceNumber =
+          tallyInvoice.invoiceNumber?.trim();
+
+        // ------------------------------------
+        // Invoice number missing
+        // ------------------------------------
+        if (!invoiceNumber) {
+          console.log(
+            `[IMPORT] Invoice skipped: invoice number is missing`
+          );
+
+          skipped++;
+          continue;
+        }
+
+        console.log(
+          `[IMPORT] Processing invoice: ${invoiceNumber}`
+        );
+
+        // ------------------------------------
+        // Check if invoice already exists
+        // ------------------------------------
+        const existingInvoice =
+          await invoiceRepository.findOne({
+            where: {
+              invoiceNumber,
+              order: {
+                client: {
+                  clientId,
+                },
+              },
+            },
+            relations: {
+              order: true,
+            },
+          });
+
+        // ------------------------------------
+        // Invoice already exists
+        // ------------------------------------
+        if (existingInvoice) {
+          console.log(
+            `[IMPORT] Invoice already exists: ${invoiceNumber}`
+          );
+
+          existingInvoice.amount =
+            Number(tallyInvoice.amount || 0);
+
+          existingInvoice.tax =
+            Number(tallyInvoice.tax || 0);
+
+          existingInvoice.isAsync = true;
+
+          await invoiceRepository.save(
+            existingInvoice
+          );
+
+          updated++;
+
+          console.log(
+            `[IMPORT] Invoice updated successfully: ${invoiceNumber}`
+          );
+
+          continue;
+        }
+
+        // ------------------------------------
+        // Invoice does not exist
+        // ------------------------------------
+        console.log(
+          `[IMPORT] Invoice does not exist: ${invoiceNumber}`
+        );
+
+        // ------------------------------------
+        // Find existing Order
+        // ------------------------------------
+        const order =
+          await orderRepository.findOne({
+            where: {
+              orderNumber: invoiceNumber,
+              client: {
+                clientId,
+              },
+            },
+            relations: {
+              client: true,
+            },
+          });
+
+        // ------------------------------------
+        // Order not found
+        // ------------------------------------
+        if (!order) {
+          console.log(
+            `[IMPORT] Order not found for invoice: ${invoiceNumber}`
+          );
+
+          failed++;
+          continue;
+        }
+
+        console.log(
+          `[IMPORT] Matching order found: ${order.orderId}`
+        );
+
+        // ------------------------------------
+        // Check if order already has invoice
+        // ------------------------------------
+        if (order.invoice) {
+          console.log(
+            `[IMPORT] Order ${order.orderId} already has an invoice`
+          );
+
+          failed++;
+          continue;
+        }
+
+        // ------------------------------------
+        // Create new Invoice
+        // ------------------------------------
+        const newInvoice =
+          invoiceRepository.create({
+            invoiceNumber,
+
+            order,
+
+            amount:
+              Number(tallyInvoice.amount || 0),
+
+            tax:
+              Number(tallyInvoice.tax || 0),
+
+            shipping_amount:
+              Number(order.shipping_amount || 0),
+
+            status:
+              InvoiceStatus.UNPAID,
+
+            isAsync: true,
+          });
+
+        await invoiceRepository.save(
+          newInvoice
+        );
+
+        created++;
+
+        console.log(
+          `[IMPORT] Invoice created successfully: ${invoiceNumber}`
+        );
+
+      } catch (error: any) {
+        failed++;
+
+        console.error(
+          `[IMPORT] Invoice import failed: ${tallyInvoice?.invoiceNumber}`,
+          error?.message
+        );
+      }
+    }
+
+    console.log(
+      `[IMPORT] Completed | Total: ${invoices.length} | Created: ${created} | Updated: ${updated} | Skipped: ${skipped} | Failed: ${failed}`
+    );
+
+    return {
+      total: invoices.length,
+      created,
+      updated,
+      skipped,
+      failed,
+    };
+  }
+
+  async processInvoiceExportResult(
+    clientId: number,
+    data: any
+  ) {
+    const invoiceRepository =
+      AppDataSource.getRepository(Invoice);
+
+    const results =
+      Array.isArray(data)
+        ? data
+        : [];
+
+    let processed = 0;
+    let failed = 0;
+
+    for (const result of results) {
+
+      console.log(
+        "Processing invoice export result:",
+        result
+      );
+
+      try {
+
+        const invoiceId =
+          Number(result.invoiceId);
+
+        console.log(
+          "invoiceId:",
+          invoiceId
+        );
+
+        console.log(
+          "status:",
+          result.status
+        );
+
+        if (!invoiceId) {
+          failed++;
+
+          console.error(
+            "Invoice ID missing in export result."
+          );
+
+          continue;
+        }
+
+        const invoice =
+          await invoiceRepository.findOne({
+            where: {
+              invoiceId,
+
+              order: {
+                client: {
+                  clientId,
+                },
+              },
+            },
+
+            relations: {
+              order: true,
+            },
+          });
+
+        if (!invoice) {
+          failed++;
+
+          console.error(
+            `Invoice not found: ${invoiceId}`
+          );
+
+          continue;
+        }
+
+        // =============================================
+        // TALLY ALREADY HAS IT
+        // OR TALLY CREATED IT
+        // =============================================
+
+        if (
+          result.status === "EXISTS" ||
+          result.status === "CREATED"
+        ) {
+
+          invoice.isAsync = true;
+
+          await invoiceRepository.save(
+            invoice
+          );
+
+          processed++;
+
+          console.log(
+            `Invoice synced: ${invoice.invoiceNumber} | ` +
+            `${result.status} | isAsync=true`
+          );
+
+          continue;
+        }
+
+        // =============================================
+        // FAILED
+        // =============================================
+
+        if (result.status === "FAILED") {
+
+          failed++;
+
+          console.error(
+            `Invoice export failed: ` +
+            `${invoice.invoiceNumber} | ` +
+            `${result.error ?? "Unknown error"}`
+          );
+
+          continue;
+        }
+
+        failed++;
+
+        console.error(
+          `Unknown invoice export status: ${result.status}`
+        );
+
+      } catch (error: any) {
+
+        failed++;
+
+        console.error(
+          "Failed to process invoice export result:",
+          error?.message
+        );
+      }
+    }
+
+    console.log(
+      "INVOICE EXPORT PROCESSING COMPLETE",
       {
         total: results.length,
         processed,

@@ -47,6 +47,13 @@ export class Invoice extends BaseEntity {
     })
     paymentReference: string;
 
+    // Tally sync status
+    @Column({
+        type: "boolean",
+        default: false,
+    })
+    isAsync: boolean;
+
     @CreateDateColumn()
     created_at: Date;
 
