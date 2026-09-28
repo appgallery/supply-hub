@@ -251,7 +251,7 @@ export class TallyService {
     userId: number
   ) {
 
-    console.log("🔥🔥🔥 CREATE SYNC JOB CALLED 🔥🔥🔥");
+    console.log("CREATE SYNC JOB CALLED");
 
     console.log("clientId:", clientId);
     console.log("deviceId:", deviceId);

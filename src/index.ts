@@ -39,7 +39,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
-    console.log("🔥 REQUEST REACHED EXPRESS");
+    console.log("REQUEST REACHED EXPRESS");
     console.log("METHOD:", req.method);
     console.log("URL:", req.originalUrl);
     next();
@@ -51,16 +51,16 @@ const PORT = process.env.PORT;
 
 AppDataSource.initialize()
     .then(() => {
-        console.log("✅ Database Connected");
+        console.log(" Database Connected");
 
         const server = app.listen(PORT, () => {
-            console.log(`🚀 Server running on port ${PORT}`);
+            console.log(` Server running on port ${PORT}`);
         });
 
         console.log(server.listening);
 
     })
     .catch((error) => {
-        console.error("❌ Database Connection Failed");
+        console.error(" Database Connection Failed");
         console.error(error);
     });
