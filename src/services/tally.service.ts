@@ -42,6 +42,19 @@ export class TallyService {
     );
 
   // =========================================================
+  // WAITING SYNC RESULTS
+  // =========================================================
+
+  private pendingSyncResults = new Map<
+    number,
+    {
+      resolve: (result: any) => void;
+      reject: (error: Error) => void;
+      timer: NodeJS.Timeout;
+    }
+  >();
+
+  // =========================================================
   // 1. CREATE ACTIVATION CODE
   // =========================================================
 
@@ -347,6 +360,18 @@ export class TallyService {
         jobId: savedJob.id,
       });
 
+      // =======================================================
+      // START WAITING BEFORE SENDING COMMAND
+      // =======================================================
+
+      const resultPromise =
+        this.waitForSyncResult(
+          savedJob.id
+        );
+
+      // =======================================================
+      // SEND COMMAND TO .NET CONNECTOR
+      // =======================================================
 
       await this.sendTallyCommand(
         device.deviceId,
@@ -356,53 +381,71 @@ export class TallyService {
         }
       );
 
-
       console.log(
         "Command successfully sent to connector."
       );
 
+      // =======================================================
+      // WAIT UNTIL .NET RETURNS FINAL RESULT
+      // =======================================================
+
+      const finalResult =
+        await resultPromise;
+
+      console.log(
+        "Final Tally sync result received:",
+        JSON.stringify(
+          finalResult,
+          null,
+          2
+        )
+      );
+
+      return finalResult;
+
     } catch (error: any) {
 
       console.error(
-        "Failed to send command:",
+        "Tally sync failed:",
         error
       );
 
+      // Remove pending waiter if it still exists
+      const pending =
+        this.pendingSyncResults.get(
+          savedJob.id
+        );
+
+      if (pending) {
+
+        clearTimeout(
+          pending.timer
+        );
+
+        this.pendingSyncResults.delete(
+          savedJob.id
+        );
+      }
 
       savedJob.status =
         TallySyncStatus.FAILED;
 
       savedJob.errorMessage =
         error?.message ||
-        "Failed to send sync command to Tally connector.";
+        "Tally sync failed.";
+
+      savedJob.completedAt =
+        new Date();
 
       await this.tallySyncJobRepository.save(
         savedJob
       );
 
       throw new Error(
-        "Failed to send sync command to Tally connector."
+        error?.message ||
+        "Tally sync failed."
       );
     }
-
-
-    return {
-
-      jobId:
-        savedJob.id,
-
-      clientId:
-        savedJob.clientId,
-
-      deviceId:
-        device.deviceId,
-
-      type:
-        savedJob.type,
-
-      status:
-        savedJob.status,
-    };
   }
 
 
@@ -446,7 +489,6 @@ export class TallyService {
     const job =
       await this.tallySyncJobRepository.findOne({
         where,
-
         relations: {
           tallyDevice: true,
         },
@@ -460,11 +502,15 @@ export class TallyService {
 
     let data: any[] = [];
 
-    // ==========================================
+    // =========================================================
     // EXPORT CATEGORIES
-    // ==========================================
+    // Node DB -> .NET
+    // =========================================================
 
-    if (job.type === TallySyncType.EXPORT_CATEGORIES) {
+    if (
+      job.type ===
+      TallySyncType.EXPORT_CATEGORIES
+    ) {
 
       const categoryRepository =
         AppDataSource.getRepository(Category);
@@ -475,22 +521,39 @@ export class TallyService {
             client: {
               clientId: job.clientId,
             },
+            isAsync: false,
           },
         });
 
-      data = categories.map((category) => ({
-        categoryCode: category.categoryCode,
-        categoryName: category.categoryName,
-        description: category.description,
-        isActive: category.isActive,
-      }));
+      data = categories.map(
+        (category) => ({
+          categoryId:
+            category.categoryId,
+
+          categoryCode:
+            category.categoryCode,
+
+          categoryName:
+            category.categoryName,
+
+          description:
+            category.description,
+
+          isActive:
+            category.isActive,
+        })
+      );
     }
 
-    // ==========================================
+    // =========================================================
     // EXPORT PRODUCTS
-    // ==========================================
+    // Node DB -> .NET
+    // =========================================================
 
-    if (job.type === TallySyncType.EXPORT_PRODUCTS) {
+    if (
+      job.type ===
+      TallySyncType.EXPORT_PRODUCTS
+    ) {
 
       const productRepository =
         AppDataSource.getRepository(Product);
@@ -501,6 +564,7 @@ export class TallyService {
             client: {
               clientId: job.clientId,
             },
+            isAsync: false,
           },
 
           relations: {
@@ -508,34 +572,76 @@ export class TallyService {
           },
         });
 
-      data = products.map((product) => ({
-        productCode: product.productCode,
-        productName: product.productName,
-        description: product.description,
-        basePrice: Number(product.base_price),
-        discountPercentage:
-          Number(product.discount_percentage),
-        discountedPrice:
-          product.discounted_price !== null
-            ? Number(product.discounted_price)
-            : null,
-        currency: product.currency,
-        isActive: product.is_active,
-        unit: product.unit_text,
-        minDeliveryDays:
-          product.min_delivery_days,
-        maxDeliveryDays:
-          product.max_delivery_days,
+      data = products.map(
+        (product) => ({
+          productId:
+            product.productId,
 
-        categoryCode:
-          product.category?.categoryCode,
+          productCode:
+            product.productCode,
 
-        categoryName:
-          product.category?.categoryName,
-      }));
+          productName:
+            product.productName,
+
+          description:
+            product.description,
+
+          base_price:
+            Number(product.base_price || 0),
+
+          discount_percentage:
+            Number(
+              product.discount_percentage || 0
+            ),
+
+          discounted_price:
+            product.discounted_price !== null
+              ? Number(
+                product.discounted_price
+              )
+              : null,
+
+          currency:
+            product.currency,
+
+          is_active:
+            product.is_active,
+
+          unit_text:
+            product.unit_text,
+
+          min_delivery_days:
+            product.min_delivery_days,
+
+          max_delivery_days:
+            product.max_delivery_days,
+
+          category:
+            product.category
+              ? {
+                categoryId:
+                  product.category.categoryId,
+
+                categoryCode:
+                  product.category.categoryCode,
+
+                categoryName:
+                  product.category.categoryName,
+              }
+              : null,
+        })
+      );
     }
 
-    if (job.type === TallySyncType.EXPORT_INVOICES) {
+    // =========================================================
+    // EXPORT INVOICES
+    // Node DB -> .NET
+    // =========================================================
+
+    if (
+      job.type ===
+      TallySyncType.EXPORT_INVOICES
+    ) {
 
       const invoiceRepository =
         AppDataSource.getRepository(Invoice);
@@ -545,89 +651,165 @@ export class TallyService {
           where: {
             order: {
               client: {
-                clientId: job.clientId,
+                clientId:
+                  job.clientId,
               },
             },
-            isAsync: true,
+
+            // IMPORTANT:
+            // Only invoices which are not synced
+            isAsync: false,
           },
+
           relations: {
             order: {
               subClient: true,
               client: true,
+
               items: {
                 variant: {
-                  product: true
-                }
+                  product: true,
+                },
               },
             },
+
             transactions: true,
           },
         });
-      console.log(
-        "Invoice count:",
-        invoices.length
+
+      data = invoices.map(
+        (invoice) => ({
+          invoiceId:
+            invoice.invoiceId,
+
+          invoiceNumber:
+            invoice.invoiceNumber,
+
+          invoiceDate:
+            invoice.created_at
+              ? invoice.created_at
+                .toISOString()
+                .split("T")[0]
+              : null,
+
+          partyName:
+            invoice.order?.subClient?.companyName ||
+            invoice.order?.subClient?.contactPerson ||
+            "",
+
+          voucherType:
+            "Sales",
+
+          amount:
+            Number(invoice.amount || 0),
+
+          tax:
+            Number(invoice.tax || 0),
+
+          shippingAmount:
+            Number(
+              invoice.shipping_amount || 0
+            ),
+
+          items:
+            invoice.order?.items?.map(
+              (item) => ({
+                productName:
+                  item.variant?.product
+                    ?.productName || "",
+
+                quantity:
+                  Number(item.quantity || 0),
+
+                rate:
+                  Number(item.price || 0),
+
+                amount:
+                  Number(item.total || 0),
+
+                unit:
+                  item.variant?.product
+                    ?.unit_text || "",
+              })
+            ) || [],
+        })
       );
-
-      if (invoices.length > 0) {
-        console.log(
-          "Invoice items:",
-          invoices[0].order?.items
-        );
-      }
-
-      data = invoices.map((invoice) => ({
-        invoiceId: invoice.invoiceId,
-        invoiceNumber: invoice.invoiceNumber,
-
-        invoiceDate:
-          invoice.created_at
-            .toISOString()
-            .split("T")[0],
-
-        // Buyer / customer
-        partyName:
-          invoice.order?.subClient?.companyName ||
-          invoice.order?.subClient?.contactPerson ||
-          "",
-
-        voucherType:
-          "Sales",
-
-        amount:
-          Number(invoice.amount),
-
-        tax:
-          Number(invoice.tax),
-
-        shippingAmount:
-          Number(invoice.shipping_amount),
-
-        items: invoice.order.items.map(item => ({
-          productName: item.variant?.product?.productName,
-          quantity: Number(item.quantity),
-          rate: Number(item.price),
-          amount: Number(item.total),
-        }))
-      }));
     }
 
+    // =========================================================
+    // IMPORT TYPES
+    //
+    // Node does not send data for imports.
+    // .NET gets data from Tally and sends it
+    // to POST /sync/result.
+    // =========================================================
+
+    if (
+      job.type ===
+      TallySyncType.IMPORT_CATEGORIES ||
+      job.type ===
+      TallySyncType.IMPORT_PRODUCTS ||
+      job.type ===
+      TallySyncType.IMPORT_INVOICES
+    ) {
+      data = [];
+    }
+
+    // =========================================================
+    // UPDATE JOB
+    // =========================================================
+
+    job.totalRecords =
+      data.length;
+
+    job.status =
+      TallySyncStatus.RUNNING;
+
+    job.startedAt =
+      job.startedAt || new Date();
+
+    await this.tallySyncJobRepository.save(
+      job
+    );
+
+    // =========================================================
+    // RETURN DATA TO .NET CONNECTOR
+    // =========================================================
+
     return {
-      jobId: job.id,
-      clientId: job.clientId,
-      deviceId: job.tallyDevice?.deviceId,
-      type: job.type,
-      status: job.status,
+      jobId:
+        job.id,
 
-      totalRecords: job.totalRecords,
-      processedRecords: job.processedRecords,
-      failedRecords: job.failedRecords,
+      clientId:
+        job.clientId,
 
-      errorMessage: job.errorMessage,
+      deviceId:
+        job.tallyDevice?.deviceId,
 
-      startedAt: job.startedAt,
-      completedAt: job.completedAt,
+      type:
+        job.type,
 
-      // Export data
+      status:
+        job.status,
+
+      totalRecords:
+        job.totalRecords,
+
+      processedRecords:
+        job.processedRecords,
+
+      failedRecords:
+        job.failedRecords,
+
+      errorMessage:
+        job.errorMessage,
+
+      startedAt:
+        job.startedAt,
+
+      completedAt:
+        job.completedAt,
+
       data,
     };
   }
@@ -710,24 +892,66 @@ export class TallyService {
     );
   }
 
+  // =========================================================
+  // 8. SYNC RESULT
+  // =========================================================
+
   async syncResult(body: any) {
+
     const {
       jobId,
       deviceId,
       type,
       data,
-      totalRecords = 0,
-      processedRecords = 0,
-      failedRecords = 0,
+      error,
     } = body;
 
-    console.log("sync result called");
+    console.log(
+      "================================="
+    );
+
+    console.log(
+      "SYNC RESULT RECEIVED"
+    );
+
+    console.log(
+      "jobId:",
+      jobId
+    );
+
+    console.log(
+      "deviceId:",
+      deviceId
+    );
+
+    console.log(
+      "type:",
+      type
+    );
+
+    console.log(
+      "data:",
+      JSON.stringify(
+        data,
+        null,
+        2
+      )
+    );
+
+    console.log(
+      "================================="
+    );
+
+    // =========================================================
+    // GET JOB
+    // =========================================================
 
     const job =
       await this.tallySyncJobRepository.findOne({
         where: {
           id: jobId,
         },
+
         relations: {
           tallyDevice: true,
           createdBy: true,
@@ -735,51 +959,91 @@ export class TallyService {
       });
 
     if (!job) {
-      throw new Error("Sync job not found.");
+      throw new Error(
+        "Sync job not found."
+      );
     }
 
-    const userId = job.createdBy?.userId;
+    // =========================================================
+    // VALIDATE DEVICE
+    // =========================================================
 
     if (
-      job.tallyDevice?.deviceId !== deviceId
+      job.tallyDevice?.deviceId !==
+      deviceId
     ) {
       throw new Error(
         "Device does not belong to this sync job."
       );
     }
 
-    console.log("=================================");
-    console.log(`Tally Sync Job: ${jobId}`);
-    console.log(`Type: ${type}`);
-    console.log("=================================");
-
     // =========================================================
-    // CATEGORY IMPORT
-    // Tally -> .NET -> Node
+    // VALIDATE TYPE
     // =========================================================
 
-    if (type === "IMPORT_CATEGORIES") {
-      const importResult =
-        await this.importCategories(
-          job.clientId,
-          data,
-          userId
-        );
+    if (job.type !== type) {
+      throw new Error(
+        `Sync type mismatch. Job type is ${job.type}, but received ${type}.`
+      );
+    }
 
-      job.totalRecords =
-        importResult.total;
+    const userId =
+      job.createdBy?.userId;
 
-      job.processedRecords =
-        importResult.created +
-        importResult.updated;
+    const entityName =
+      type.includes("CATEGORIES")
+        ? "Category"
+        : type.includes("PRODUCTS")
+          ? "Product"
+          : type.includes("INVOICES")
+            ? "Invoice"
+            : "Tally";
 
-      job.failedRecords =
-        importResult.failed;
+    let result: any;
+
+    // =========================================================
+    // CONNECTOR-LEVEL ERROR
+    // .NET CONNECTOR -> NODE
+    // =========================================================
+
+    if (error) {
+
+      const errorMessage =
+        typeof error === "string"
+          ? error
+          : error?.message ||
+          "Connector sync failed.";
+
+      const result = {
+        total: 0,
+        created: 0,
+        updated: 0,
+        alreadyExists: 0,
+        failed: 1,
+
+        records: [
+          {
+            status: "FAILED",
+            error: errorMessage,
+          },
+        ],
+      };
+
+      // =======================================================
+      // UPDATE JOB
+      // =======================================================
+
+      job.totalRecords = 0;
+
+      job.processedRecords = 0;
+
+      job.failedRecords = 1;
 
       job.status =
-        importResult.failed > 0
-          ? TallySyncStatus.FAILED
-          : TallySyncStatus.COMPLETED;
+        TallySyncStatus.FAILED;
+
+      job.errorMessage =
+        errorMessage;
 
       job.completedAt =
         new Date();
@@ -788,13 +1052,93 @@ export class TallyService {
         job
       );
 
-      return {
-        jobId,
-        deviceId,
-        type,
-        status: job.status,
-        ...importResult,
+      // =======================================================
+      // FINAL RESPONSE
+      // =======================================================
+
+      const finalResult = {
+
+        jobId:
+          job.id,
+
+        clientId:
+          job.clientId,
+
+        deviceId:
+          job.tallyDevice.deviceId,
+
+        type:
+          job.type,
+
+        status:
+          job.status,
+
+        message:
+          `${entityName} sync failed.`,
+
+        summary: {
+
+          total:
+            0,
+
+          created:
+            0,
+
+          updated:
+            0,
+
+          alreadyExists:
+            0,
+
+          failed:
+            1,
+        },
+
+        records:
+          result.records,
       };
+
+      // =======================================================
+      // IMPORTANT:
+      // RESOLVE THE ORIGINAL /SYNC REQUEST
+      // =======================================================
+
+      const pending =
+        this.pendingSyncResults.get(
+          job.id
+        );
+
+      if (pending) {
+
+        clearTimeout(
+          pending.timer
+        );
+
+        this.pendingSyncResults.delete(
+          job.id
+        );
+
+        pending.resolve(
+          finalResult
+        );
+      }
+
+      return finalResult;
+    }
+
+    if (
+      type ===
+      TallySyncType.IMPORT_CATEGORIES
+    ) {
+
+      result =
+        await this.importCategories(
+          job.clientId,
+          Array.isArray(data)
+            ? data
+            : [],
+          userId
+        );
     }
 
     // =========================================================
@@ -802,46 +1146,16 @@ export class TallyService {
     // Node -> .NET -> Tally -> Node
     // =========================================================
 
-    if (type === "EXPORT_CATEGORIES") {
-      const exportResult =
+    else if (
+      type ===
+      TallySyncType.EXPORT_CATEGORIES
+    ) {
+
+      result =
         await this.processCategoryExportResult(
           job.clientId,
           data
         );
-
-      job.totalRecords =
-        exportResult.total;
-
-      job.processedRecords =
-        exportResult.processed;
-
-      job.failedRecords =
-        exportResult.failed;
-
-      job.status =
-        exportResult.failed > 0
-          ? TallySyncStatus.FAILED
-          : TallySyncStatus.COMPLETED;
-
-      job.completedAt =
-        new Date();
-
-      await this.tallySyncJobRepository.save(
-        job
-      );
-
-      return {
-        jobId,
-        deviceId,
-        type,
-        status: job.status,
-        totalRecords:
-          exportResult.total,
-        processedRecords:
-          exportResult.processed,
-        failedRecords:
-          exportResult.failed,
-      };
     }
 
     // =========================================================
@@ -849,49 +1163,19 @@ export class TallyService {
     // Tally -> .NET -> Node
     // =========================================================
 
-    if (type === "IMPORT_PRODUCTS") {
+    else if (
+      type ===
+      TallySyncType.IMPORT_PRODUCTS
+    ) {
 
-      console.log("========== IMPORT_PRODUCTS DATA ==========");
-      console.log("Data type:", typeof data);
-      console.log("Is array:", Array.isArray(data));
-      console.log("Data:", JSON.stringify(data, null, 2));
-      console.log("==========================================");
-      const importResult =
+      result =
         await this.importProducts(
           job.clientId,
-          data,
+          Array.isArray(data)
+            ? data
+            : [],
           userId
         );
-
-      job.totalRecords =
-        importResult.total;
-
-      job.processedRecords =
-        importResult.created +
-        importResult.updated;
-
-      job.failedRecords =
-        importResult.failed;
-
-      job.status =
-        importResult.failed > 0
-          ? TallySyncStatus.FAILED
-          : TallySyncStatus.COMPLETED;
-
-      job.completedAt =
-        new Date();
-
-      await this.tallySyncJobRepository.save(
-        job
-      );
-
-      return {
-        jobId,
-        deviceId,
-        type,
-        status: job.status,
-        ...importResult,
-      };
     }
 
     // =========================================================
@@ -899,141 +1183,89 @@ export class TallyService {
     // Node -> .NET -> Tally -> Node
     // =========================================================
 
-    if (type === "EXPORT_PRODUCTS") {
-      const exportResult =
+    else if (
+      type ===
+      TallySyncType.EXPORT_PRODUCTS
+    ) {
+
+      result =
         await this.processProductExportResult(
           job.clientId,
           data
         );
-
-      job.totalRecords =
-        exportResult.total;
-
-      job.processedRecords =
-        exportResult.processed;
-
-      job.failedRecords =
-        exportResult.failed;
-
-      job.status =
-        exportResult.failed > 0
-          ? TallySyncStatus.FAILED
-          : TallySyncStatus.COMPLETED;
-
-      job.completedAt =
-        new Date();
-
-      await this.tallySyncJobRepository.save(
-        job
-      );
-
-      return {
-        jobId,
-        deviceId,
-        type,
-        status: job.status,
-        totalRecords:
-          exportResult.total,
-        processedRecords:
-          exportResult.processed,
-        failedRecords:
-          exportResult.failed,
-      };
     }
 
-    if (type === "IMPORT_INVOICES") {
+    // =========================================================
+    // INVOICE IMPORT
+    // Tally -> .NET -> Node
+    // =========================================================
 
-      const importResult =
+    else if (
+      type ===
+      TallySyncType.IMPORT_INVOICES
+    ) {
+
+      result =
         await this.importInvoices(
           job.clientId,
-          data,
+          Array.isArray(data)
+            ? data
+            : [],
           userId
         );
+    }
 
-      job.totalRecords =
-        importResult.total;
+    // =========================================================
+    // INVOICE EXPORT
+    // Node -> .NET -> Tally -> Node
+    // =========================================================
 
-      job.processedRecords =
-        importResult.created +
-        importResult.updated;
+    else if (
+      type ===
+      TallySyncType.EXPORT_INVOICES
+    ) {
 
-      job.failedRecords =
-        importResult.failed;
-
-      job.status =
-        importResult.failed > 0
-          ? TallySyncStatus.FAILED
-          : TallySyncStatus.COMPLETED;
-
-      job.completedAt =
-        new Date();
-
-      await this.tallySyncJobRepository.save(job);
-
-      return {
-        jobId,
-        deviceId,
-        type,
-        status: job.status,
-        ...importResult,
-      };
-    } if (type === "EXPORT_INVOICES") {
-
-      const exportResult =
+      result =
         await this.processInvoiceExportResult(
           job.clientId,
           data
         );
-
-      job.totalRecords =
-        exportResult.total;
-
-      job.processedRecords =
-        exportResult.processed;
-
-      job.failedRecords =
-        exportResult.failed;
-
-      job.status =
-        exportResult.failed > 0
-          ? TallySyncStatus.FAILED
-          : TallySyncStatus.COMPLETED;
-
-      job.completedAt =
-        new Date();
-
-      await this.tallySyncJobRepository.save(job);
-
-      return {
-        jobId,
-        deviceId,
-        type,
-        status: job.status,
-        totalRecords: exportResult.total,
-        processedRecords: exportResult.processed,
-        failedRecords: exportResult.failed,
-      };
     }
 
+    // =========================================================
+    // INVALID TYPE
+    // =========================================================
 
+    else {
+      throw new Error(
+        `Unsupported Tally sync type: ${type}`
+      );
+    }
 
     // =========================================================
-    // OTHER SYNC TYPES
+    // UPDATE JOB
     // =========================================================
 
     job.totalRecords =
-      totalRecords;
+      result.total;
 
     job.processedRecords =
-      processedRecords;
+      result.created +
+      result.updated +
+      result.alreadyExists;
 
     job.failedRecords =
-      failedRecords;
+      result.failed;
 
     job.status =
-      failedRecords > 0
+      result.failed > 0
         ? TallySyncStatus.FAILED
         : TallySyncStatus.COMPLETED;
+
+    job.errorMessage =
+      result.failed > 0
+        ? `${result.failed} record(s) failed during sync.`
+        : null;
 
     job.completedAt =
       new Date();
@@ -1042,15 +1274,85 @@ export class TallyService {
       job
     );
 
-    return {
-      jobId,
-      deviceId,
-      type,
-      status: job.status,
-      totalRecords,
-      processedRecords,
-      failedRecords,
+    // =========================================================
+    // GET ENTITY NAME
+    // =========================================================
+
+
+
+    // =========================================================
+    // FINAL RESPONSE
+    // =========================================================
+
+    const finalResult = {
+
+      jobId:
+        job.id,
+
+      clientId:
+        job.clientId,
+
+      deviceId:
+        deviceId,
+
+      type:
+        job.type,
+
+      status:
+        job.status,
+
+      message:
+        result.failed > 0
+          ? `${entityName} sync completed with errors.`
+          : `${entityName} sync completed successfully.`,
+
+      summary: {
+
+        total:
+          result.total,
+
+        created:
+          result.created,
+
+        updated:
+          result.updated,
+
+        alreadyExists:
+          result.alreadyExists,
+
+        failed:
+          result.failed,
+      },
+
+      records:
+        result.records || [],
     };
+
+    // =========================================================
+    // RESOLVE /SYNC REQUEST
+    // =========================================================
+
+    const pending =
+      this.pendingSyncResults.get(
+        job.id
+      );
+
+    if (pending) {
+
+      clearTimeout(
+        pending.timer
+      );
+
+      this.pendingSyncResults.delete(
+        job.id
+      );
+
+      pending.resolve(
+        finalResult
+      );
+    }
+
+    return finalResult;
   }
 
   async importCategories(
@@ -1062,43 +1364,60 @@ export class TallyService {
     }>,
     userId: number
   ) {
+
     const categoryRepository =
       AppDataSource.getRepository(Category);
 
     let created = 0;
     let updated = 0;
-    let skipped = 0;
     let failed = 0;
 
-    for (const tallyCategory of categories) {
-      try {
-        // =======================================================
-        // VALIDATE CATEGORY NAME
-        // =======================================================
+    const records: any[] = [];
 
-        const categoryName =
-          (tallyCategory.Name ?? (tallyCategory as any).name)?.trim();
+    for (const tallyCategory of categories) {
+
+      const categoryName =
+        (
+          tallyCategory.Name ??
+          (tallyCategory as any).name
+        )?.trim();
+
+      try {
+
+        // =====================================================
+        // VALIDATION
+        // =====================================================
 
         if (!categoryName) {
-          skipped++;
 
-          console.warn(
-            "Skipping Tally category because name is empty."
-          );
+          failed++;
+
+          records.push({
+            categoryId: null,
+            categoryCode: null,
+            categoryName: null,
+
+            status: "FAILED",
+
+            message:
+              "Category name is missing.",
+
+            error:
+              "Category name is required.",
+          });
 
           continue;
         }
 
-        // =======================================================
-        // GENERATE CATEGORY CODE
-        // =======================================================
+        const description =
+          (
+            tallyCategory.Description ??
+            (tallyCategory as any).description
+          )?.trim() || null;
 
-        const categoryCode =
-          await generateCategoryCode();
-
-        // =======================================================
-        // FIND EXISTING CATEGORY
-        // =======================================================
+        // =====================================================
+        // FIND EXISTING
+        // =====================================================
 
         const existingCategory =
           await categoryRepository.findOne({
@@ -1106,21 +1425,19 @@ export class TallyService {
               client: {
                 clientId,
               },
+
               categoryName,
             },
           });
 
-        // =======================================================
-        // UPDATE EXISTING CATEGORY
-        // =======================================================
+        // =====================================================
+        // UPDATE
+        // =====================================================
 
         if (existingCategory) {
-          existingCategory.categoryName =
-            categoryName;
 
           existingCategory.description =
-            (tallyCategory.Description ?? (tallyCategory as any).description)?.trim() ||
-            null;
+            description;
 
           existingCategory.isAsync =
             true;
@@ -1134,16 +1451,32 @@ export class TallyService {
 
           updated++;
 
-          console.log(
-            `Category updated: ${categoryName}`
-          );
+          records.push({
+            categoryId:
+              existingCategory.categoryId,
+
+            categoryCode:
+              existingCategory.categoryCode,
+
+            categoryName:
+              existingCategory.categoryName,
+
+            status:
+              "UPDATED",
+
+            message:
+              `Category "${categoryName}" updated successfully from Tally.`,
+          });
 
           continue;
         }
 
-        // =======================================================
-        // CREATE NEW CATEGORY
-        // =======================================================
+        // =====================================================
+        // CREATE
+        // =====================================================
+
+        const categoryCode =
+          await generateCategoryCode();
 
         const newCategory =
           categoryRepository.create({
@@ -1155,17 +1488,17 @@ export class TallyService {
 
             categoryName,
 
-            description:
-              (tallyCategory.Description ?? (tallyCategory as any).description)?.trim() ||
-              null,
+            description,
 
             isAsync: true,
 
             isActive: true,
 
-            createdBy: userId,
+            createdBy:
+              userId,
 
-            updatedBy: null,
+            updatedBy:
+              null,
           });
 
         await categoryRepository.save(
@@ -1174,26 +1507,67 @@ export class TallyService {
 
         created++;
 
-        console.log(
-          `Category created: ${categoryName}`
-        );
+        records.push({
+          categoryId:
+            newCategory.categoryId,
+
+          categoryCode:
+            newCategory.categoryCode,
+
+          categoryName:
+            newCategory.categoryName,
+
+          status:
+            "CREATED",
+
+          message:
+            `Category "${categoryName}" created successfully from Tally.`,
+        });
 
       } catch (error: any) {
+
         failed++;
 
-        console.error(
-          `Failed to import category "${tallyCategory?.Name}":`,
-          error?.message
-        );
+        records.push({
+          categoryId: null,
+
+          categoryCode: null,
+
+          categoryName:
+            categoryName || null,
+
+          status:
+            "FAILED",
+
+          message:
+            `Category "${categoryName || ""}" failed to import.`,
+
+          error:
+            error?.message ||
+            "Unknown server error.",
+        });
       }
     }
 
     return {
-      total: categories.length,
+
+      total:
+        categories.length,
+
       created,
+
       updated,
-      skipped,
+
+      alreadyExists:
+        0,
+
       failed,
+
+      processed:
+        created +
+        updated,
+
+      records,
     };
   }
 
@@ -1201,6 +1575,7 @@ export class TallyService {
     clientId: number,
     data: any
   ) {
+
     const categoryRepository =
       AppDataSource.getRepository(Category);
 
@@ -1209,28 +1584,63 @@ export class TallyService {
         ? data
         : [];
 
-    let processed = 0;
+    let created = 0;
+    let updated = 0;
+    let alreadyExists = 0;
     let failed = 0;
 
+    const records: any[] = [];
+
     for (const result of results) {
+
       try {
+
         const categoryCode =
           result.categoryCode?.trim();
 
+        const categoryName =
+          result.categoryName?.trim();
+
+        // =====================================================
+        // CATEGORY CODE MISSING
+        // =====================================================
+
         if (!categoryCode) {
+
           failed++;
 
-          console.error(
-            "Category code missing in export result."
-          );
+          records.push({
+            categoryId:
+              result.categoryId ?? null,
+
+            categoryCode:
+              null,
+
+            categoryName:
+              categoryName || null,
+
+            status:
+              "FAILED",
+
+            message:
+              "Category code is missing in export result.",
+
+            error:
+              "Category code is missing.",
+          });
 
           continue;
         }
+
+        // =====================================================
+        // FIND CATEGORY
+        // =====================================================
 
         const category =
           await categoryRepository.findOne({
             where: {
               categoryCode,
+
               client: {
                 clientId,
               },
@@ -1238,68 +1648,249 @@ export class TallyService {
           });
 
         if (!category) {
+
           failed++;
 
-          console.error(
-            `Category not found: ${categoryCode}`
-          );
+          records.push({
+            categoryId:
+              result.categoryId ?? null,
+
+            categoryCode,
+
+            categoryName:
+              categoryName || null,
+
+            status:
+              "FAILED",
+
+            message:
+              `Category "${categoryName || categoryCode}" was not found.`,
+
+            error:
+              `Category ${categoryCode} not found for client ${clientId}.`,
+          });
 
           continue;
         }
 
-        // Tally already had the category
-        // OR .NET successfully created it.
+        // =====================================================
+        // CREATED
+        // =====================================================
+
         if (
-          result.status === "EXISTS" ||
           result.status === "CREATED"
         ) {
-          category.isAsync = true;
+
+          category.isAsync =
+            true;
 
           await categoryRepository.save(
             category
           );
 
-          processed++;
+          created++;
 
-          console.log(
-            `Category synced: ${category.categoryName} | ${result.status}`
-          );
+          records.push({
+            categoryId:
+              category.categoryId,
+
+            categoryCode:
+              category.categoryCode,
+
+            categoryName:
+              category.categoryName,
+
+            status:
+              "CREATED",
+
+            message:
+              `Category "${category.categoryName}" created successfully in Tally.`,
+          });
 
           continue;
         }
 
-        // Tally creation failed
-        if (result.status === "FAILED") {
+        // =====================================================
+        // EXISTS
+        // =====================================================
+
+        if (
+          result.status === "EXISTS"
+        ) {
+
+          category.isAsync =
+            true;
+
+          await categoryRepository.save(
+            category
+          );
+
+          alreadyExists++;
+
+          records.push({
+            categoryId:
+              category.categoryId,
+
+            categoryCode:
+              category.categoryCode,
+
+            categoryName:
+              category.categoryName,
+
+            status:
+              "EXISTS",
+
+            message:
+              `Category "${category.categoryName}" already exists in Tally.`,
+          });
+
+          continue;
+        }
+
+        // =====================================================
+        // UPDATED
+        // =====================================================
+
+        if (
+          result.status === "UPDATED" ||
+          result.status === "ALTERED"
+        ) {
+
+          category.isAsync =
+            true;
+
+          await categoryRepository.save(
+            category
+          );
+
+          updated++;
+
+          records.push({
+            categoryId:
+              category.categoryId,
+
+            categoryCode:
+              category.categoryCode,
+
+            categoryName:
+              category.categoryName,
+
+            status:
+              "UPDATED",
+
+            message:
+              `Category "${category.categoryName}" updated successfully in Tally.`,
+          });
+
+          continue;
+        }
+
+        // =====================================================
+        // FAILED
+        // =====================================================
+
+        if (
+          result.status === "FAILED"
+        ) {
+
           failed++;
 
-          console.error(
-            `Category export failed: ${category.categoryName} | ${result.error ?? "Unknown error"
-            }`
-          );
+          records.push({
+            categoryId:
+              category.categoryId,
+
+            categoryCode:
+              category.categoryCode,
+
+            categoryName:
+              category.categoryName,
+
+            status:
+              "FAILED",
+
+            message:
+              `Category "${category.categoryName}" failed to sync.`,
+
+            error:
+              result.error ||
+              "Unknown error returned by Tally Connector.",
+          });
 
           continue;
         }
 
+        // =====================================================
+        // UNKNOWN STATUS
+        // =====================================================
+
         failed++;
 
-        console.error(
-          `Unknown category export status: ${result.status}`
-        );
+        records.push({
+          categoryId:
+            category.categoryId,
+
+          categoryCode:
+            category.categoryCode,
+
+          categoryName:
+            category.categoryName,
+
+          status:
+            "FAILED",
+
+          message:
+            `Unknown sync status for category "${category.categoryName}".`,
+
+          error:
+            `Unknown status: ${result.status}`,
+        });
 
       } catch (error: any) {
+
         failed++;
 
-        console.error(
-          "Failed to process category export result:",
-          error?.message
-        );
+        records.push({
+          categoryId:
+            result.categoryId ?? null,
+
+          categoryCode:
+            result.categoryCode ?? null,
+
+          categoryName:
+            result.categoryName ?? null,
+
+          status:
+            "FAILED",
+
+          message:
+            "Unexpected error while processing category sync result.",
+
+          error:
+            error?.message ||
+            "Unknown server error.",
+        });
       }
     }
 
     return {
-      total: results.length,
-      processed,
+
+      total:
+        results.length,
+
+      created,
+
+      updated,
+
+      alreadyExists,
+
       failed,
+
+      processed:
+        created +
+        updated +
+        alreadyExists,
+
+      records,
     };
   }
 
@@ -1324,48 +1915,74 @@ export class TallyService {
 
     let created = 0;
     let updated = 0;
-    let skipped = 0;
     let failed = 0;
+
+    const records: any[] = [];
 
     for (const tallyProduct of products) {
       try {
-        // =========================================================
+
+        // =====================================================
         // 1. VALIDATE PRODUCT NAME
-        // =========================================================
+        // =====================================================
 
         const productName =
           tallyProduct.name?.trim();
 
         if (!productName) {
-          skipped++;
 
-          console.warn(
-            "Skipping Tally product because name is empty."
-          );
+          failed++;
+
+          records.push({
+            productId: null,
+
+            productName: null,
+
+            status:
+              "FAILED",
+
+            message:
+              "Product name is missing.",
+
+            error:
+              "Product name is required.",
+          });
 
           continue;
         }
 
-        // =========================================================
-        // 2. GET TALLY PARENT / CATEGORY NAME
-        // =========================================================
+        // =====================================================
+        // 2. GET TALLY PARENT / CATEGORY
+        // =====================================================
 
         const categoryName =
           tallyProduct.parent?.trim();
 
         if (!categoryName) {
+
           failed++;
 
-          console.error(
-            `Category/Parent missing for product: ${productName}`
-          );
+          records.push({
+            productId: null,
+
+            productName,
+
+            status:
+              "FAILED",
+
+            message:
+              `Product "${productName}" failed to import.`,
+
+            error:
+              "Category/Parent is missing.",
+          });
 
           continue;
         }
 
-        // =========================================================
+        // =====================================================
         // 3. FIND CATEGORY
-        // =========================================================
+        // =====================================================
 
         let category =
           await categoryRepository.findOne({
@@ -1373,15 +1990,18 @@ export class TallyService {
               client: {
                 clientId,
               },
+
               categoryName,
             },
           });
 
-        // =========================================================
-        // 4. CATEGORY DOES NOT EXIST -> CREATE IT
-        // =========================================================
+        // =====================================================
+        // 4. CATEGORY DOES NOT EXIST
+        //    CREATE CATEGORY
+        // =====================================================
 
         if (!category) {
+
           console.log(
             `Category "${categoryName}" not found. Creating it...`
           );
@@ -1399,15 +2019,20 @@ export class TallyService {
 
               categoryName,
 
-              description: null,
+              description:
+                null,
 
-              isAsync: true,
+              isAsync:
+                true,
 
-              isActive: true,
+              isActive:
+                true,
 
-              createdBy: userId,
+              createdBy:
+                userId,
 
-              updatedBy: null,
+              updatedBy:
+                null,
             });
 
           category =
@@ -1418,17 +2043,17 @@ export class TallyService {
           console.log(
             `Category created: ${categoryName} | ID: ${category.categoryId}`
           );
+
         } else {
+
           console.log(
             `Category found: ${categoryName} | ID: ${category.categoryId}`
           );
         }
 
-        // =========================================================
+        // =====================================================
         // 5. FIND EXISTING PRODUCT
-        //
-        // DO NOT generate a new productCode before this.
-        // =========================================================
+        // =====================================================
 
         const existingProduct =
           await productRepository.findOne({
@@ -1436,15 +2061,17 @@ export class TallyService {
               client: {
                 clientId,
               },
+
               productName,
             },
           });
 
-        // =========================================================
+        // =====================================================
         // 6. UPDATE EXISTING PRODUCT
-        // =========================================================
+        // =====================================================
 
         if (existingProduct) {
+
           existingProduct.productName =
             productName;
 
@@ -1461,16 +2088,16 @@ export class TallyService {
             tallyProduct.rate !== undefined
           ) {
             existingProduct.base_price =
-              Number(tallyProduct.rate);
+              Number(
+                tallyProduct.rate
+              );
           }
 
-          // IMPORTANT:
-          // Store the actual Category entity / FK
+          // Assign Category relation
           existingProduct.category =
             category;
 
-          // IMPORTANT:
-          // Product was synchronized from Tally
+          // Imported from Tally
           existingProduct.isAsync =
             true;
 
@@ -1483,6 +2110,20 @@ export class TallyService {
 
           updated++;
 
+          records.push({
+            productId:
+              existingProduct.productId,
+
+            productName:
+              existingProduct.productName,
+
+            status:
+              "UPDATED",
+
+            message:
+              `Product "${productName}" updated successfully from Tally.`,
+          });
+
           console.log(
             `Product updated: ${productName} | ` +
             `Category: ${category.categoryName} | ` +
@@ -1493,16 +2134,17 @@ export class TallyService {
           continue;
         }
 
-        // =========================================================
-        // 7. PRODUCT DOES NOT EXIST -> GENERATE CODE
-        // =========================================================
+        // =====================================================
+        // 7. PRODUCT DOES NOT EXIST
+        //    GENERATE PRODUCT CODE
+        // =====================================================
 
         const productCode =
           await generateProductCode();
 
-        // =========================================================
+        // =====================================================
         // 8. CREATE PRODUCT
-        // =========================================================
+        // =====================================================
 
         const newProduct =
           productRepository.create({
@@ -1521,30 +2163,38 @@ export class TallyService {
             base_price:
               tallyProduct.rate !== null &&
                 tallyProduct.rate !== undefined
-                ? Number(tallyProduct.rate)
+                ? Number(
+                  tallyProduct.rate
+                )
                 : 0,
 
-            discount_percentage: 0,
+            discount_percentage:
+              0,
 
-            discounted_price: null,
+            discounted_price:
+              null,
 
-            currency: "AUD",
+            currency:
+              "AUD",
 
-            is_active: true,
+            is_active:
+              true,
 
             unit_text:
               tallyProduct.baseUnits?.trim() ||
               null,
 
-            min_delivery_days: null,
+            min_delivery_days:
+              null,
 
-            max_delivery_days: null,
+            max_delivery_days:
+              null,
 
-            // IMPORTANT
-            isAsync: true,
+            // Imported from Tally
+            isAsync:
+              true,
 
-            // IMPORTANT
-            // This stores Category FK through the relation
+            // Category relation
             category,
 
             created_by:
@@ -1560,6 +2210,20 @@ export class TallyService {
 
         created++;
 
+        records.push({
+          productId:
+            newProduct.productId,
+
+          productName:
+            newProduct.productName,
+
+          status:
+            "CREATED",
+
+          message:
+            `Product "${productName}" created successfully from Tally.`,
+        });
+
         console.log(
           `Product created: ${productName} | ` +
           `Product Code: ${productCode} | ` +
@@ -1569,7 +2233,26 @@ export class TallyService {
         );
 
       } catch (error: any) {
+
         failed++;
+
+        records.push({
+          productId: null,
+
+          productName:
+            tallyProduct?.name ||
+            null,
+
+          status:
+            "FAILED",
+
+          message:
+            `Product "${tallyProduct?.name || ""}" failed to import.`,
+
+          error:
+            error?.message ||
+            "Unknown server error.",
+        });
 
         console.error(
           `Failed to import product "${tallyProduct?.name}":`,
@@ -1578,12 +2261,28 @@ export class TallyService {
       }
     }
 
+    // =====================================================
+    // FINAL RESULT
+    // =====================================================
+
     return {
-      total: products.length,
+      total:
+        products.length,
+
       created,
+
       updated,
-      skipped,
+
+      alreadyExists:
+        0,
+
       failed,
+
+      processed:
+        created +
+        updated,
+
+      records,
     };
   }
 
@@ -1600,23 +2299,35 @@ export class TallyService {
     const productRepository =
       AppDataSource.getRepository(Product);
 
-    const results = Array.isArray(data) ? data : [];
+    const results =
+      Array.isArray(data) ? data : [];
 
-    let processed = 0;
+    let created = 0;
+    let updated = 0;
+    let alreadyExists = 0;
     let failed = 0;
 
+    const records: any[] = [];
+
     for (const result of results) {
-      console.log("Processing result:", result);
 
       try {
-        const productId = Number(result.productId);
 
-        console.log("productId:", productId);
-        console.log("status:", result.status);
+        const productId =
+          Number(result.productId);
 
         if (!productId) {
+
           failed++;
-          console.error("Product ID missing in export result.");
+
+          records.push({
+            productId: result.productId ?? null,
+            productName: result.productName ?? null,
+            status: "FAILED",
+            message: "Product ID is missing in export result.",
+            error: "Product ID is missing.",
+          });
+
           continue;
         }
 
@@ -1631,84 +2342,159 @@ export class TallyService {
           });
 
         if (!product) {
+
           failed++;
-          console.error(`Product not found: ${productId}`);
+
+          records.push({
+            productId,
+            productName: result.productName ?? null,
+            status: "FAILED",
+            message: `Product ${productId} was not found.`,
+            error: `Product ${productId} not found for client ${clientId}.`,
+          });
+
           continue;
         }
 
-        console.log(
-          "BEFORE UPDATE:",
-          product.productId,
-          product.productName,
-          "isAsync:",
-          product.isAsync
-        );
+        // ============================================
+        // CREATED
+        // ============================================
 
-        if (
-          result.status === "EXISTS" ||
-          result.status === "CREATED"
-        ) {
+        if (result.status === "CREATED") {
+
           product.isAsync = true;
-
-          console.log(
-            "SETTING isAsync = true for:",
-            product.productName
-          );
 
           await productRepository.save(product);
 
-          console.log(
-            "AFTER SAVE:",
-            product.productId,
-            product.productName,
-            "isAsync:",
-            product.isAsync
-          );
+          created++;
 
-          processed++;
+          records.push({
+            productId: product.productId,
+            productName: product.productName,
+            status: "CREATED",
+            message:
+              `Product "${product.productName}" created successfully in Tally.`,
+          });
+
           continue;
         }
+
+        // ============================================
+        // EXISTS
+        // ============================================
+
+        if (result.status === "EXISTS") {
+
+          product.isAsync = true;
+
+          await productRepository.save(product);
+
+          alreadyExists++;
+
+          records.push({
+            productId: product.productId,
+            productName: product.productName,
+            status: "EXISTS",
+            message:
+              `Product "${product.productName}" already exists in Tally.`,
+          });
+
+          continue;
+        }
+
+        // ============================================
+        // UPDATED / ALTERED
+        // ============================================
+
+        if (
+          result.status === "UPDATED" ||
+          result.status === "ALTERED"
+        ) {
+
+          product.isAsync = true;
+
+          await productRepository.save(product);
+
+          updated++;
+
+          records.push({
+            productId: product.productId,
+            productName: product.productName,
+            status: "UPDATED",
+            message:
+              `Product "${product.productName}" updated successfully in Tally.`,
+          });
+
+          continue;
+        }
+
+        // ============================================
+        // FAILED
+        // ============================================
 
         if (result.status === "FAILED") {
+
           failed++;
 
-          console.error(
-            `Product export failed: ${product.productName} | ${result.error ?? "Unknown error"
-            }`
-          );
+          records.push({
+            productId: product.productId,
+            productName: product.productName,
+            status: "FAILED",
+            message:
+              `Product "${product.productName}" failed to sync.`,
+            error:
+              result.error ||
+              "Unknown error returned by Tally Connector.",
+          });
 
           continue;
         }
 
+        // ============================================
+        // UNKNOWN STATUS
+        // ============================================
+
         failed++;
 
-        console.error(
-          `Unknown product export status: ${result.status}`
-        );
+        records.push({
+          productId: product.productId,
+          productName: product.productName,
+          status: "FAILED",
+          message:
+            `Unknown sync status for product "${product.productName}".`,
+          error:
+            `Unknown status: ${result.status}`,
+        });
 
       } catch (error: any) {
+
         failed++;
 
-        console.error(
-          "Failed to process product export result:",
-          error?.message
-        );
+        records.push({
+          productId: result.productId ?? null,
+          productName: result.productName ?? null,
+          status: "FAILED",
+          message:
+            "Unexpected error while processing product sync result.",
+          error:
+            error?.message ||
+            "Unknown server error.",
+        });
       }
     }
 
-    console.log(
-      "PRODUCT EXPORT PROCESSING COMPLETE",
-      {
-        total: results.length,
-        processed,
-        failed,
-      }
-    );
-
     return {
       total: results.length,
-      processed,
+      created,
+      updated,
+      alreadyExists,
       failed,
+      processed:
+        created +
+        updated +
+        alreadyExists,
+
+      records,
     };
   }
 
@@ -1739,8 +2525,9 @@ export class TallyService {
 
     let created = 0;
     let updated = 0;
-    let skipped = 0;
     let failed = 0;
+
+    const records: any[] = [];
 
     for (const tallyInvoice of invoices) {
       try {
@@ -1749,18 +2536,30 @@ export class TallyService {
           JSON.stringify(tallyInvoice, null, 2)
         );
 
+        // =====================================================
+        // 1. GET INVOICE NUMBER
+        // =====================================================
+
         const invoiceNumber =
           tallyInvoice.invoiceNumber?.trim();
 
-        // ------------------------------------
-        // Invoice number missing
-        // ------------------------------------
-        if (!invoiceNumber) {
-          console.log(
-            `[IMPORT] Invoice skipped: invoice number is missing`
-          );
+        // =====================================================
+        // 2. VALIDATE INVOICE NUMBER
+        // =====================================================
 
-          skipped++;
+        if (!invoiceNumber) {
+          failed++;
+
+          records.push({
+            invoiceId: null,
+            invoiceNumber: null,
+            status: "FAILED",
+            message:
+              "Invoice number is missing.",
+            error:
+              "Invoice number is required.",
+          });
+
           continue;
         }
 
@@ -1768,45 +2567,68 @@ export class TallyService {
           `[IMPORT] Processing invoice: ${invoiceNumber}`
         );
 
-        // ------------------------------------
-        // Check if invoice already exists
-        // ------------------------------------
+        // =====================================================
+        // 3. CHECK IF INVOICE ALREADY EXISTS
+        // =====================================================
+
         const existingInvoice =
           await invoiceRepository.findOne({
             where: {
               invoiceNumber,
+
               order: {
                 client: {
                   clientId,
                 },
               },
             },
+
             relations: {
               order: true,
             },
           });
 
-        // ------------------------------------
-        // Invoice already exists
-        // ------------------------------------
+        // =====================================================
+        // 4. UPDATE EXISTING INVOICE
+        // =====================================================
+
         if (existingInvoice) {
           console.log(
             `[IMPORT] Invoice already exists: ${invoiceNumber}`
           );
 
           existingInvoice.amount =
-            Number(tallyInvoice.amount || 0);
+            Number(
+              tallyInvoice.amount || 0
+            );
 
           existingInvoice.tax =
-            Number(tallyInvoice.tax || 0);
+            Number(
+              tallyInvoice.tax || 0
+            );
 
-          existingInvoice.isAsync = true;
+          existingInvoice.isAsync =
+            true;
 
           await invoiceRepository.save(
             existingInvoice
           );
 
           updated++;
+
+          records.push({
+            invoiceId:
+              existingInvoice.invoiceId,
+
+            invoiceNumber:
+              existingInvoice.invoiceNumber,
+
+            status:
+              "UPDATED",
+
+            message:
+              `Invoice "${invoiceNumber}" updated successfully from Tally.`,
+          });
 
           console.log(
             `[IMPORT] Invoice updated successfully: ${invoiceNumber}`
@@ -1815,38 +2637,56 @@ export class TallyService {
           continue;
         }
 
-        // ------------------------------------
-        // Invoice does not exist
-        // ------------------------------------
+        // =====================================================
+        // 5. FIND MATCHING ORDER
+        // =====================================================
+
         console.log(
           `[IMPORT] Invoice does not exist: ${invoiceNumber}`
         );
 
-        // ------------------------------------
-        // Find existing Order
-        // ------------------------------------
         const order =
           await orderRepository.findOne({
             where: {
-              orderNumber: invoiceNumber,
+              orderNumber:
+                invoiceNumber,
+
               client: {
                 clientId,
               },
             },
+
             relations: {
               client: true,
             },
           });
 
-        // ------------------------------------
-        // Order not found
-        // ------------------------------------
+        // =====================================================
+        // 6. ORDER NOT FOUND
+        // =====================================================
+
         if (!order) {
           console.log(
             `[IMPORT] Order not found for invoice: ${invoiceNumber}`
           );
 
           failed++;
+
+          records.push({
+            invoiceId: null,
+
+            invoiceNumber,
+
+            status:
+              "FAILED",
+
+            message:
+              `Invoice "${invoiceNumber}" failed to import.`,
+
+            error:
+              `Order "${invoiceNumber}" was not found for client ${clientId}.`,
+          });
+
           continue;
         }
 
@@ -1854,21 +2694,39 @@ export class TallyService {
           `[IMPORT] Matching order found: ${order.orderId}`
         );
 
-        // ------------------------------------
-        // Check if order already has invoice
-        // ------------------------------------
+        // =====================================================
+        // 7. CHECK IF ORDER ALREADY HAS INVOICE
+        // =====================================================
+
         if (order.invoice) {
           console.log(
             `[IMPORT] Order ${order.orderId} already has an invoice`
           );
 
           failed++;
+
+          records.push({
+            invoiceId: null,
+
+            invoiceNumber,
+
+            status:
+              "FAILED",
+
+            message:
+              `Invoice "${invoiceNumber}" failed to import.`,
+
+            error:
+              `Order ${order.orderId} already has an invoice.`,
+          });
+
           continue;
         }
 
-        // ------------------------------------
-        // Create new Invoice
-        // ------------------------------------
+        // =====================================================
+        // 8. CREATE NEW INVOICE
+        // =====================================================
+
         const newInvoice =
           invoiceRepository.create({
             invoiceNumber,
@@ -1876,18 +2734,25 @@ export class TallyService {
             order,
 
             amount:
-              Number(tallyInvoice.amount || 0),
+              Number(
+                tallyInvoice.amount || 0
+              ),
 
             tax:
-              Number(tallyInvoice.tax || 0),
+              Number(
+                tallyInvoice.tax || 0
+              ),
 
             shipping_amount:
-              Number(order.shipping_amount || 0),
+              Number(
+                order.shipping_amount || 0
+              ),
 
             status:
               InvoiceStatus.UNPAID,
 
-            isAsync: true,
+            isAsync:
+              true,
           });
 
         await invoiceRepository.save(
@@ -1896,12 +2761,45 @@ export class TallyService {
 
         created++;
 
+        records.push({
+          invoiceId:
+            newInvoice.invoiceId,
+
+          invoiceNumber:
+            newInvoice.invoiceNumber,
+
+          status:
+            "CREATED",
+
+          message:
+            `Invoice "${invoiceNumber}" created successfully from Tally.`,
+        });
+
         console.log(
           `[IMPORT] Invoice created successfully: ${invoiceNumber}`
         );
 
       } catch (error: any) {
+
         failed++;
+
+        records.push({
+          invoiceId: null,
+
+          invoiceNumber:
+            tallyInvoice?.invoiceNumber ||
+            null,
+
+          status:
+            "FAILED",
+
+          message:
+            `Invoice "${tallyInvoice?.invoiceNumber || ""}" failed to import.`,
+
+          error:
+            error?.message ||
+            "Unknown server error.",
+        });
 
         console.error(
           `[IMPORT] Invoice import failed: ${tallyInvoice?.invoiceNumber}`,
@@ -1911,15 +2809,27 @@ export class TallyService {
     }
 
     console.log(
-      `[IMPORT] Completed | Total: ${invoices.length} | Created: ${created} | Updated: ${updated} | Skipped: ${skipped} | Failed: ${failed}`
+      `[IMPORT] Completed | Total: ${invoices.length} | Created: ${created} | Updated: ${updated} | Failed: ${failed}`
     );
 
     return {
-      total: invoices.length,
+      total:
+        invoices.length,
+
       created,
+
       updated,
-      skipped,
+
+      alreadyExists:
+        0,
+
       failed,
+
+      processed:
+        created +
+        updated,
+
+      records,
     };
   }
 
@@ -1927,6 +2837,7 @@ export class TallyService {
     clientId: number,
     data: any
   ) {
+
     const invoiceRepository =
       AppDataSource.getRepository(Invoice);
 
@@ -1935,40 +2846,54 @@ export class TallyService {
         ? data
         : [];
 
-    let processed = 0;
+    let created = 0;
+    let updated = 0;
+    let alreadyExists = 0;
     let failed = 0;
 
-    for (const result of results) {
+    const records: any[] = [];
 
-      console.log(
-        "Processing invoice export result:",
-        result
-      );
+    for (const result of results) {
 
       try {
 
         const invoiceId =
           Number(result.invoiceId);
 
-        console.log(
-          "invoiceId:",
-          invoiceId
-        );
+        const invoiceNumber =
+          result.invoiceNumber?.trim();
 
-        console.log(
-          "status:",
-          result.status
-        );
+        // =====================================================
+        // VALIDATE INVOICE ID
+        // =====================================================
 
         if (!invoiceId) {
+
           failed++;
 
-          console.error(
-            "Invoice ID missing in export result."
-          );
+          records.push({
+            invoiceId:
+              result.invoiceId ?? null,
+
+            invoiceNumber:
+              invoiceNumber || null,
+
+            status:
+              "FAILED",
+
+            message:
+              "Invoice ID is missing in export result.",
+
+            error:
+              "Invoice ID is required.",
+          });
 
           continue;
         }
+
+        // =====================================================
+        // FIND INVOICE
+        // =====================================================
 
         const invoice =
           await invoiceRepository.findOne({
@@ -1988,89 +2913,264 @@ export class TallyService {
           });
 
         if (!invoice) {
+
           failed++;
 
-          console.error(
-            `Invoice not found: ${invoiceId}`
-          );
+          records.push({
+            invoiceId,
+
+            invoiceNumber:
+              invoiceNumber || null,
+
+            status:
+              "FAILED",
+
+            message:
+              `Invoice "${invoiceNumber || invoiceId}" was not found.`,
+
+            error:
+              `Invoice ${invoiceId} not found for client ${clientId}.`,
+          });
 
           continue;
         }
 
-        // =============================================
-        // TALLY ALREADY HAS IT
-        // OR TALLY CREATED IT
-        // =============================================
+        // =====================================================
+        // CREATED
+        // =====================================================
 
         if (
-          result.status === "EXISTS" ||
           result.status === "CREATED"
         ) {
 
-          invoice.isAsync = true;
+          invoice.isAsync =
+            true;
 
           await invoiceRepository.save(
             invoice
           );
 
-          processed++;
+          created++;
 
-          console.log(
-            `Invoice synced: ${invoice.invoiceNumber} | ` +
-            `${result.status} | isAsync=true`
-          );
+          records.push({
+            invoiceId:
+              invoice.invoiceId,
+
+            invoiceNumber:
+              invoice.invoiceNumber,
+
+            status:
+              "CREATED",
+
+            message:
+              `Invoice "${invoice.invoiceNumber}" created successfully in Tally.`,
+          });
 
           continue;
         }
 
-        // =============================================
-        // FAILED
-        // =============================================
+        // =====================================================
+        // EXISTS
+        // =====================================================
 
-        if (result.status === "FAILED") {
+        if (
+          result.status === "EXISTS"
+        ) {
+
+          invoice.isAsync =
+            true;
+
+          await invoiceRepository.save(
+            invoice
+          );
+
+          alreadyExists++;
+
+          records.push({
+            invoiceId:
+              invoice.invoiceId,
+
+            invoiceNumber:
+              invoice.invoiceNumber,
+
+            status:
+              "EXISTS",
+
+            message:
+              `Invoice "${invoice.invoiceNumber}" already exists in Tally.`,
+          });
+
+          continue;
+        }
+
+        // =====================================================
+        // UPDATED
+        // =====================================================
+
+        if (
+          result.status === "UPDATED" ||
+          result.status === "ALTERED"
+        ) {
+
+          invoice.isAsync =
+            true;
+
+          await invoiceRepository.save(
+            invoice
+          );
+
+          updated++;
+
+          records.push({
+            invoiceId:
+              invoice.invoiceId,
+
+            invoiceNumber:
+              invoice.invoiceNumber,
+
+            status:
+              "UPDATED",
+
+            message:
+              `Invoice "${invoice.invoiceNumber}" updated successfully in Tally.`,
+          });
+
+          continue;
+        }
+
+        // =====================================================
+        // FAILED
+        // =====================================================
+
+        if (
+          result.status === "FAILED"
+        ) {
 
           failed++;
 
-          console.error(
-            `Invoice export failed: ` +
-            `${invoice.invoiceNumber} | ` +
-            `${result.error ?? "Unknown error"}`
-          );
+          records.push({
+            invoiceId:
+              invoice.invoiceId,
+
+            invoiceNumber:
+              invoice.invoiceNumber,
+
+            status:
+              "FAILED",
+
+            message:
+              `Invoice "${invoice.invoiceNumber}" failed to sync.`,
+
+            error:
+              result.error ||
+              "Unknown error returned by Tally Connector.",
+          });
 
           continue;
         }
 
+        // =====================================================
+        // UNKNOWN STATUS
+        // =====================================================
+
         failed++;
 
-        console.error(
-          `Unknown invoice export status: ${result.status}`
-        );
+        records.push({
+          invoiceId:
+            invoice.invoiceId,
+
+          invoiceNumber:
+            invoice.invoiceNumber,
+
+          status:
+            "FAILED",
+
+          message:
+            `Unknown sync status for invoice "${invoice.invoiceNumber}".`,
+
+          error:
+            `Unknown status: ${result.status}`,
+        });
 
       } catch (error: any) {
 
         failed++;
 
-        console.error(
-          "Failed to process invoice export result:",
-          error?.message
-        );
+        records.push({
+          invoiceId:
+            result.invoiceId ?? null,
+
+          invoiceNumber:
+            result.invoiceNumber ?? null,
+
+          status:
+            "FAILED",
+
+          message:
+            "Unexpected error while processing invoice sync result.",
+
+          error:
+            error?.message ||
+            "Unknown server error.",
+        });
       }
     }
 
-    console.log(
-      "INVOICE EXPORT PROCESSING COMPLETE",
-      {
-        total: results.length,
-        processed,
-        failed,
-      }
-    );
-
     return {
-      total: results.length,
-      processed,
+
+      total:
+        results.length,
+
+      created,
+
+      updated,
+
+      alreadyExists,
+
       failed,
+
+      processed:
+        created +
+        updated +
+        alreadyExists,
+
+      records,
     };
+  }
+
+  // =========================================================
+  // WAIT FOR SYNC RESULT
+  // =========================================================
+
+  private waitForSyncResult(
+    jobId: number,
+    timeoutMs = 5 * 60 * 1000
+  ): Promise<any> {
+
+    return new Promise((resolve, reject) => {
+
+      const timer = setTimeout(() => {
+
+        this.pendingSyncResults.delete(jobId);
+
+        reject(
+          new Error(
+            `Sync job ${jobId} timed out. No result received from Tally Connector within 5 minutes.`
+          )
+        );
+
+      }, timeoutMs);
+
+      this.pendingSyncResults.set(
+        jobId,
+        {
+          resolve,
+          reject,
+          timer,
+        }
+      );
+
+    });
   }
 
 }

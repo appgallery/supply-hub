@@ -259,10 +259,20 @@ export const createSyncJob = async (
         Number(userId)
       );
 
-    return res.status(201).json({
-      status: true,
-      message: "Tally sync job created successfully.",
-      data: result,
+    return res.status(
+      result.status === TallySyncStatus.COMPLETED
+        ? 200
+        : 207
+    ).json({
+      status:
+        result.status ===
+        TallySyncStatus.COMPLETED,
+
+      message:
+        result.message,
+
+      data:
+        result,
     });
 
   } catch (error: any) {
