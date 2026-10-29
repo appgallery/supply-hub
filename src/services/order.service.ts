@@ -381,13 +381,11 @@ export const getOrders = async (
         search,
         status,
         subClientId,
-        paymentStatus
+        paymentStatus,
     } = query;
 
     const user = await userRepository.findOne({
-        where: {
-            userId,
-        },
+        where: { userId },
         relations: [
             "client",
             "subClient",
@@ -414,81 +412,101 @@ export const getOrders = async (
         .leftJoinAndSelect("order.invoice", "invoice")
         .leftJoinAndSelect("invoice.transactions", "transaction");
 
-    // Client can see all dealer orders
+    // Role / ownership filter
     if (user.client) {
         qb.andWhere(
             "client.clientId = :clientId",
-            {
-                clientId: user.client.clientId
-            }
+            { clientId: user.client.clientId }
         );
 
         if (subClientId) {
             qb.andWhere(
-                "subClient.subClientId = :subClientId",
-                {
-                    subClientId: Number(subClientId)
-                }
+                "subClient.subClientId = :filterSubClientId",
+                { filterSubClientId: Number(subClientId) }
             );
         }
+    } else if (user.subClient) {
+        qb.andWhere(
+            "subClient.subClientId = :ownSubClientId",
+            { ownSubClientId: user.subClient.subClientId }
+        );
+    } else {
+        throw new Error("You are not authorized to access orders.");
     }
 
-    // Dealer can see only own orders
-    else if (user.subClient) {
+    // Search by order ID, client name, sub-client name, or product name
+    if (search?.trim()) {
+        const searchTerm = search.trim();
+
+        const conditions = [
+            "CAST(order.orderId AS TEXT) ILIKE :search",
+            "client.companyName ILIKE :search",
+            "subClient.companyName ILIKE :search",
+            "product.productName ILIKE :search",
+        ];
+
         qb.andWhere(
-            "subClient.subClientId = :subClientId",
-            {
-                subClientId: user.subClient.subClientId
-            }
+            `(${conditions.join(" OR ")})`,
+            { search: `%${searchTerm}%` }
         );
     }
 
-    // Search by client name OR product name
-    if (search) {
-        qb.andWhere(
-            `
-            (
-                client.companyName ILIKE :search
-                OR product.productName ILIKE :search
-            )
-            `,
-            {
-                search: `%${search}%`
-            }
-        );
-    }
-
-    if (status) {
-        qb.andWhere(
-            "order.status = :status",
-            {
-                status
-            }
-        );
-    }
-
+    // Payment status filter
     if (paymentStatus) {
         qb.andWhere(
             "order.payment_status = :paymentStatus",
-            {
-                paymentStatus,
-            }
+            { paymentStatus }
         );
     }
 
-    qb.orderBy(
-        "order.created_at",
-        "DESC"
-    );
+    // Calculate counts without the selected order-status filter
+    const countQuery = qb.clone();
 
-    qb.skip(Number(offset))
-        .take(Number(limit));
+    const [
+        totalOrders,
+        pendingOrders,
+        processingOrders,
+        completedOrders,
+        rejectedOrders,
+    ] = await Promise.all([
+        countQuery.clone().getCount(),
 
-    const [orders, total] =
-        await qb.getManyAndCount();
+        countQuery.clone()
+            .andWhere("order.status = :pendingStatus", {
+                pendingStatus: "PENDING",
+            })
+            .getCount(),
 
-    // Use discounted price saved in OrderItem
-    // instead of the current Variant discounted price
+        countQuery.clone()
+            .andWhere("order.status = :processingStatus", {
+                processingStatus: "PROCESSING",
+            })
+            .getCount(),
+
+        countQuery.clone()
+            .andWhere("order.status = :completedStatus", {
+                completedStatus: "COMPLETED",
+            })
+            .getCount(),
+
+        countQuery.clone()
+            .andWhere("order.status = :rejectedStatus", {
+                rejectedStatus: "REJECTED",
+            })
+            .getCount(),
+    ]);
+
+    // Apply selected status only to the returned order list
+    if (status) {
+        qb.andWhere(
+            "order.status = :selectedStatus",
+            { selectedStatus: status }
+        );
+    }
+    qb.orderBy("order.created_at", "DESC");
+    qb.skip(Number(offset)).take(Number(limit));
+    const [orders, total] = await qb.getManyAndCount();
+
     const formattedOrders = orders.map((order) => ({
         ...order,
         items: order.items.map((item) => ({
@@ -502,6 +520,15 @@ export const getOrders = async (
         offset: Number(offset),
         limit: Number(limit),
         count: total,
+
+        counts: {
+            totalOrders,
+            pendingOrders,
+            processingOrders,
+            completedOrders,
+            rejectedOrders,
+        },
+
         orders: formattedOrders,
     };
 };
