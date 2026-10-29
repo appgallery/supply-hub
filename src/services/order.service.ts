@@ -468,6 +468,7 @@ export const getOrders = async (
         processingOrders,
         completedOrders,
         rejectedOrders,
+        approvedOrders
     ] = await Promise.all([
         countQuery.clone().getCount(),
 
@@ -492,6 +493,12 @@ export const getOrders = async (
         countQuery.clone()
             .andWhere("order.status = :rejectedStatus", {
                 rejectedStatus: "REJECTED",
+            })
+            .getCount(),
+
+        countQuery.clone()
+            .andWhere("order.status = :approvedStatus", {
+                approvedStatus: "APPROVED",
             })
             .getCount(),
     ]);
@@ -527,6 +534,7 @@ export const getOrders = async (
             processingOrders,
             completedOrders,
             rejectedOrders,
+            approvedOrders
         },
 
         orders: formattedOrders,
