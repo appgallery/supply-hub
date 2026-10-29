@@ -161,7 +161,7 @@ export const getInvoices = async (
         .andWhere(
             "invoice.status = :pendingStatus",
             {
-                pendingStatus: "PENDING",
+                pendingStatus: "UNPAID",
             }
         )
         .getCount();
