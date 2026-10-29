@@ -33,7 +33,7 @@ export const generateRazorpayOAuthUrl = async (
             clientId,
         },
     });
-
+    console.log("client", client)
     if (!client) {
         throw new Error("Client not found.");
     }

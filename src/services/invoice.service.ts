@@ -84,7 +84,7 @@ export const getInvoices = async (
             }
         );
 
-    } 
+    }
     else if (roleName === Role.SUB_CLIENT) {
 
         if (!user.subClient) {
@@ -97,75 +97,113 @@ export const getInvoices = async (
                 subClientId: user.subClient.subClientId
             }
         );
-    } 
+    }
     else {
         throw new Error(
             "You are not authorized to access invoices."
         );
     }
 
-    if(invoiceId){
-
+    // Invoice ID filter
+    if (invoiceId) {
         query.andWhere(
             "invoice.invoiceId = :invoiceId",
             {
-                invoiceId
+                invoiceId,
             }
         );
     }
-    if(paymentStatus){
 
-        query.andWhere(
-            "order.payment_status = :paymentStatus",
-            {
-                paymentStatus
-            }
-        );
-    }
-    if(orderStatus){
-
+    // Order status filter
+    if (orderStatus) {
         query.andWhere(
             "order.status = :orderStatus",
             {
-                orderStatus
+                orderStatus,
             }
         );
     }
-    if(searchTerm){
 
+    // Search filter
+    if (searchTerm) {
         query.andWhere(
             "invoice.invoiceNumber ILIKE :searchTerm",
             {
-                searchTerm:`%${searchTerm}%`
+                searchTerm: `%${searchTerm}%`,
             }
         );
     }
+
+    /**
+     * Counts should ignore paymentStatus filter
+     */
+    const countQuery = query.clone();
+
+    const totalInvoices = await countQuery
+        .clone()
+        .getCount();
+
+    const paidInvoices = await countQuery
+        .clone()
+        .andWhere(
+            "order.payment_status = :paidStatus",
+            {
+                paidStatus: "PAID",
+            }
+        )
+        .getCount();
+
+    const pendingInvoices = await countQuery
+        .clone()
+        .andWhere(
+            "order.payment_status = :pendingStatus",
+            {
+                pendingStatus: "PENDING",
+            }
+        )
+        .getCount();
+
+    /**
+     * Apply payment status filter only for list data
+     */
+    if (paymentStatus) {
+        query.andWhere(
+            "order.payment_status = :paymentStatus",
+            {
+                paymentStatus,
+            }
+        );
+    }
+
     query.orderBy(
         "invoice.invoiceId",
         "DESC"
     );
+
     query.skip(offset);
     query.take(limit);
-    const [invoices,total] =
+
+    const [invoices, total] =
         await query.getManyAndCount();
 
-    if(invoiceId && invoices.length === 0){
-        throw new Error(
-            "Invoice not found."
-        );
+    if (invoiceId && invoices.length === 0) {
+        throw new Error("Invoice not found.");
     }
 
-    const response = invoices.map(invoice => ({
+    const response = invoices.map((invoice) => ({
         ...invoice,
-        amount:Number(invoice.amount)
+        amount: Number(invoice.amount),
     }));
 
     return {
-        total,
+        total, // filtered count (after paymentStatus filter)
         offset,
         limit,
-        data: invoiceId 
-            ? response[0]
-            : response
+        counts: {
+            totalInvoices,
+            paidInvoices,
+            pendingInvoices,
+        },
+        data: invoiceId ? response[0] : response,
     };
 };

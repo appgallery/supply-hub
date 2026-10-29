@@ -330,7 +330,6 @@ export class TallyService {
         startedAt: null,
         completedAt: null,
       });
-console.log("job",job)
 
     const savedJob =
       await this.tallySyncJobRepository.save(
