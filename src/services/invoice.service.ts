@@ -127,7 +127,10 @@ export const getInvoices = async (
     // Search filter
     if (searchTerm) {
         query.andWhere(
-            "invoice.invoiceNumber ILIKE :searchTerm",
+            `(
+            invoice.invoiceNumber ILIKE :searchTerm
+            OR subClient.companyName ILIKE :searchTerm
+        )`,
             {
                 searchTerm: `%${searchTerm}%`,
             }
@@ -146,7 +149,7 @@ export const getInvoices = async (
     const paidInvoices = await countQuery
         .clone()
         .andWhere(
-            "order.payment_status = :paidStatus",
+            "invoice.status = :paidStatus",
             {
                 paidStatus: "PAID",
             }
@@ -156,7 +159,7 @@ export const getInvoices = async (
     const pendingInvoices = await countQuery
         .clone()
         .andWhere(
-            "order.payment_status = :pendingStatus",
+            "invoice.status = :pendingStatus",
             {
                 pendingStatus: "PENDING",
             }
@@ -168,7 +171,7 @@ export const getInvoices = async (
      */
     if (paymentStatus) {
         query.andWhere(
-            "order.payment_status = :paymentStatus",
+            "invoice.status = :paymentStatus",
             {
                 paymentStatus,
             }
