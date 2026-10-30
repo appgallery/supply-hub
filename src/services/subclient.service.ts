@@ -329,7 +329,6 @@ export const updateSubClient = async (
         creditLimit,
         availableCredit,
         shippingAmount,
-        owner,
     } = body;
 
     const subClient = await subClientRepository.findOne({
@@ -391,8 +390,9 @@ export const updateSubClient = async (
         },
         relations: ["subClient"],
     });
+    console.log("user",user)
 
-    if (user && owner) {
+    if (user) {
 
         const existingUser = await userRepository
             .createQueryBuilder("user")
@@ -400,7 +400,7 @@ export const updateSubClient = async (
                 "(user.email = :email OR user.mobile = :mobile)",
                 {
                     email: email,
-                    mobile: owner.mobile,
+                    mobile: user.mobile,
                 }
             )
             .andWhere("user.userId != :userId", {
@@ -412,12 +412,12 @@ export const updateSubClient = async (
             throw new Error("Owner email or mobile already exists.");
         }
 
-        user.firstName = owner?.firstName || user.firstName;
-        user.lastName = owner?.lastName || user.lastName;
+        user.firstName = user.firstName;
+        user.lastName = user.lastName;
 
         // Login email should match sub client email
         user.email = email;
-        user.mobile = owner?.mobile || mobile;
+        user.mobile = user?.mobile || mobile;
 
         await userRepository.save(user);
     }
