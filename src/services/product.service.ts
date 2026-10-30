@@ -1654,27 +1654,29 @@ export const updateProduct = async (
                     variantId,
                 });
             }
-
+            console.log("VARIANTS FROM REQUEST:", JSON.stringify(body.variants, null, 2));
             for (const item of body.variants) {
                 console.log("Checking variant SKU:", {
                     variantId: item.variantId,
                     sku: item.sku,
                     name: item.name
                 });
-                // SKU validation
-                const existingSku = await manager.findOne(Variant, {
-                    where: {
-                        sku: item.sku,
-                    },
-                });
+                if (item.sku) {
+                    // SKU validation
+                    const existingSku = await manager.findOne(Variant, {
+                        where: {
+                            sku: item.sku,
+                        },
+                    });
 
-                if (
-                    existingSku &&
-                    existingSku.variantId !== item.variantId
-                ) {
-                    throw new Error(
-                        `SKU ${item.sku} already exists.`
-                    );
+                    if (
+                        existingSku &&
+                        existingSku.variantId !== item.variantId
+                    ) {
+                        throw new Error(
+                            `SKU ${item.sku} already exists.`
+                        );
+                    }
                 }
 
                 let color = null;
