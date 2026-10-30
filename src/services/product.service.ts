@@ -1732,13 +1732,18 @@ export const updateProduct = async (
                     await manager.save(variant);
 
                 } else {
-
+                    console.log("CREATING NEW VARIANT:", {
+                        name: item.name,
+                        sku: item.sku,
+                        colorId: item.colorId,
+                        sizeId: item.sizeId
+                    });
                     // CREATE
-
+                    const sku = item.sku || await generateVariantSku(manager);
                     variant = manager.create(Variant, {
                         product,
                         name: item.name,
-                        sku: item.sku,
+                        sku,
                         price: item.price,
                         stock: item.stock,
                         unit_text: item.unit_text,
