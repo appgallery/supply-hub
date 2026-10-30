@@ -399,7 +399,7 @@ export const updateSubClient = async (
             .where(
                 "(user.email = :email OR user.mobile = :mobile)",
                 {
-                    email: owner.email,
+                    email: email,
                     mobile: owner.mobile,
                 }
             )
@@ -412,10 +412,12 @@ export const updateSubClient = async (
             throw new Error("Owner email or mobile already exists.");
         }
 
-        user.firstName = owner.firstName;
-        user.lastName = owner.lastName;
-        user.email = owner.email;
-        user.mobile = owner.mobile;
+        user.firstName = owner?.firstName || user.firstName;
+        user.lastName = owner?.lastName || user.lastName;
+
+        // Login email should match sub client email
+        user.email = email;
+        user.mobile = owner?.mobile || mobile;
 
         await userRepository.save(user);
     }
