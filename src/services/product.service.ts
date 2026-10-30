@@ -99,7 +99,6 @@ export const createProduct = async (
             (Number(base_price) * Number(discount_percentage)) / 100;
         const productCode = await generateProductCode();
 
-        console.log("CREATE PRODUCT START");
         const product = manager.create(Product, {
             productCode,
             productName,
@@ -169,7 +168,6 @@ export const createProduct = async (
 
                 await manager.save(wholesaleTier);
 
-                console.log("Saving product tier:", tier);
             }
         }
 
@@ -339,7 +337,6 @@ export const getProducts = async (
     offset: number = 0,
     limit: number = 10
 ) => {
-    console.log("========== GET PRODUCTS START ==========");
 
     const safeOffset = Math.max(
         0,
@@ -565,15 +562,10 @@ export const getProducts = async (
         ),
     ];
 
-    console.log(
-        "Product IDs:",
-        productIds
-    );
+
 
     if (productIds.length === 0) {
-        console.log(
-            "No products found."
-        );
+
 
         return {
             products: [],
@@ -644,11 +636,6 @@ export const getProducts = async (
             variant =>
                 variant.variantId
         );
-
-    console.log(
-        "Variant count:",
-        variants.length
-    );
 
     // =========================================================
     // 7. LOAD ALL CHILD RELATIONS IN PARALLEL
@@ -1089,19 +1076,6 @@ export const getProducts = async (
     // FINAL RESPONSE
     // =========================================================
 
-    console.log(
-        "Products:",
-        orderedProducts.length
-    );
-
-    console.log(
-        "Total:",
-        total
-    );
-
-    console.log(
-        "========== GET PRODUCTS END =========="
-    );
 
     return {
         products: orderedProducts,
@@ -1269,10 +1243,6 @@ export const updateProduct = async (
     body: any,
     userId: number
 ) => {
-
-    console.log("========== UPDATE PRODUCT API HIT ==========");
-    console.log("Product ID:", productId);
-    console.log("Time:", new Date().toISOString());
 
     return await AppDataSource.transaction(async (manager) => {
         const user = await manager.findOne(User, {
@@ -1654,13 +1624,8 @@ export const updateProduct = async (
                     variantId,
                 });
             }
-            console.log("VARIANTS FROM REQUEST:", JSON.stringify(body.variants, null, 2));
             for (const item of body.variants) {
-                console.log("Checking variant SKU:", {
-                    variantId: item.variantId,
-                    sku: item.sku,
-                    name: item.name
-                });
+
                 if (item.sku) {
                     // SKU validation
                     const existingSku = await manager.findOne(Variant, {
@@ -1732,12 +1697,7 @@ export const updateProduct = async (
                     await manager.save(variant);
 
                 } else {
-                    console.log("CREATING NEW VARIANT:", {
-                        name: item.name,
-                        sku: item.sku,
-                        colorId: item.colorId,
-                        sizeId: item.sizeId
-                    });
+
                     // CREATE
                     const sku = item.sku || await generateVariantSku(manager);
                     variant = manager.create(Variant, {
@@ -1928,21 +1888,6 @@ export const updateProduct = async (
                             },
                         },
                     });
-
-                    console.log(
-                        "Variant ID:",
-                        variant.variantId
-                    );
-
-                    console.log(
-                        "Existing Details:",
-                        existingDetails
-                    );
-
-                    console.log(
-                        "Request Details:",
-                        item.technicalDetails
-                    );
 
                     const existingIds = existingDetails.map(
                         d => d.technicalDetailId
