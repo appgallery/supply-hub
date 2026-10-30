@@ -41,6 +41,7 @@ export const getOrdersController = async (
             message: "Order Fetched Successfully.",
             offset: result.offset,
             limit: result.limit,
+            total:result.total,
             counts: result.counts,
             data: result.orders,
         });
