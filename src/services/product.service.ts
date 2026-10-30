@@ -1656,7 +1656,11 @@ export const updateProduct = async (
             }
 
             for (const item of body.variants) {
-
+                console.log("Checking variant SKU:", {
+                    variantId: item.variantId,
+                    sku: item.sku,
+                    name: item.name
+                });
                 // SKU validation
                 const existingSku = await manager.findOne(Variant, {
                     where: {

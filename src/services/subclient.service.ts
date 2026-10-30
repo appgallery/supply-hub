@@ -387,7 +387,7 @@ export const updateSubClient = async (
             subClient: {
                 subClientId,
             },
-            isActive: false,
+            isActive: true,
         },
         relations: ["subClient"],
     });
