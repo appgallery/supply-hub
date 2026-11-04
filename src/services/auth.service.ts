@@ -19,6 +19,7 @@ export const login = async (body: any) => {
     const user = await userRepository.findOne({
         where: {
             email,
+            isActive: true,
         },
         relations: {
             role: true,
