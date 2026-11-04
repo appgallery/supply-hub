@@ -531,13 +531,13 @@ export const deleteClient = async (
             client: {
                 clientId,
             },
-            isActive: false,
+            isActive: true,
         },
         relations: ["client"],
     });
 
     if (clientOwner) {
-        clientOwner.isActive = true;
+        clientOwner.isActive = false;
         await clientOwnerRepository.save(clientOwner);
     }
 
@@ -547,7 +547,7 @@ export const deleteClient = async (
             client: {
                 clientId,
             },
-            isActive: false,
+            isActive: true,
         },
         relations: ["client"],
     });
