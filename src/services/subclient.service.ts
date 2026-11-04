@@ -467,7 +467,7 @@ export const deleteSubClient = async (
             subClient: {
                 subClientId,
             },
-            isActive: false,
+            isActive: true,
         },
         relations: ["subClient"],
     });
