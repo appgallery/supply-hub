@@ -62,7 +62,7 @@ export const getDeviceIdByActivationCode = async (
 
     const {
       activationCode,
-    } = req.body;
+    } = req.query;
 
 
     if (!activationCode) {
@@ -75,7 +75,7 @@ export const getDeviceIdByActivationCode = async (
 
     const result =
       await tallyService.getDeviceIdByActivationCode(
-        activationCode
+        String(activationCode)
       );
 
 
