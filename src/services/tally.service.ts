@@ -92,6 +92,40 @@ export class TallyService {
     return savedActivation;
   }
 
+async getDeviceIdByActivationCode(
+  activationCode: string
+) {
+  const activation =
+    await this.activationCodeRepository.findOne({
+      where: {
+        activationCode,
+      },
+    });
+  if (!activation) {
+    throw new Error("Invalid activation code.");
+  }
+
+  if (!activation.deviceId) {
+    throw new Error("Device is not activated yet.");
+  }
+  const device =
+    await this.tallyDeviceRepository.findOne({
+      where: {
+        id: activation.deviceId, // database PK
+      },
+    });
+
+  if (!device) {
+    throw new Error("Tally device not found.");
+  }
+
+  return {
+    deviceId: device.deviceId, // UUID/string
+    clientId: activation.clientId,
+    used: activation.used,
+  };
+}
+
   // =========================================================
   // 2. ACTIVATE WINDOWS CONNECTOR
   // =========================================================

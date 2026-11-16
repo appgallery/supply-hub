@@ -11,6 +11,7 @@ const router =
 
 // Your admin/B2B application generates this
 router.post("/activation-code", tallyController.createActivationCode);
+router.get("/get-device-id", tallyController.getDeviceIdByActivationCode);
 
 // Windows .NET connector calls this
 router.post("/connector/activate", tallyController.activateConnector);

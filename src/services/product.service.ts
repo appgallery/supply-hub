@@ -6,7 +6,6 @@ import { Size } from "../entities/Size";
 import { AppDataSource } from "../database/data-source";
 import { User } from "../entities/User";
 import { ActivityType, Role, SellerType } from "../utils/constants";
-import { appendFile } from "node:fs";
 import { Client } from "../entities/Client";
 import { VariantImage } from "../entities/VariantImage";
 import { Variant } from "../entities/Variants";

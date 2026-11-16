@@ -53,6 +53,50 @@ export const createActivationCode = async (
   }
 }
 
+export const getDeviceIdByActivationCode = async (
+  req: Request,
+  res: Response
+) => {
+
+  try {
+
+    const {
+      activationCode,
+    } = req.body;
+
+
+    if (!activationCode) {
+      return res.status(400).json({
+        status: false,
+        message: "activationCode is required.",
+      });
+    }
+
+
+    const result =
+      await tallyService.getDeviceIdByActivationCode(
+        activationCode
+      );
+
+
+    return res.status(200).json({
+      status: true,
+      message: "Device ID fetched successfully.",
+      data: result,
+    });
+
+
+  } catch (error: any) {
+
+    return res.status(500).json({
+      status: false,
+      message:
+        error.message ||
+        "Failed to fetch device ID.",
+    });
+  }
+};
+
 // =========================================================
 // ACTIVATE CONNECTOR
 // =========================================================
